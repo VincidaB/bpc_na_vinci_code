@@ -86,7 +86,18 @@ datasets/
 
 The `yolo_ipd` directory is the YOLO formatted version of the IPD dataset. It is used for training and testing YOLO models. it can be generated using the `bpc/2D_detection/bop_to_yolo_dataset.py` script.
 
-### usage
+### Usage
 ```bash
-python bpc/2D_detection/bop_to_yolo_dataset.py --dataset ipd --output_dir datasets/yolo_ipd
+python bpc/2D_detection/bop_to_yolo_dataset.py --dataset ipd --output_dir yolo_ipd
 ```
+
+
+## Tips
+
+To not copy your whole `ipd` dataset in the `datasets` directory, you can create a symbolic link to the `ipd` dataset directory.
+
+```bash
+ln -s /path/to/your/ipd/dataset datasets/ipd
+```
+
+We also use this trick to avoid copying the `yolo_ipd` dataset in the `datasets` directory.
