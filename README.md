@@ -64,10 +64,11 @@ dolp | ![](./assets/images/readme_dataset/val_000000_dolp_cam1_000003.jpg)  |  !
 ## Evaluation metrics 
 
 The challenge will be ranking the teams based on the mean average Precision (mAP) over a set of MSSD (Maximum Symetry-Aware Surface Distance) thresholds on the IPD dataset. MSSD is a metric defined in [[1]](#1) as being : 
-$$
+
+```math
 e_{MSPD} \left( \hat{P}, \bar{P}, S_M, V_M \right) = 
 min_{S \in S_M} max_{x \in V_M}  \left| \left| \hat{P}x  - \bar{P}Sx  \right| \right|_2
-$$
+```
 
 where:
 - $\hat{P}$ is the estimated pose
@@ -82,7 +83,7 @@ where:
 - [@VincidaB](https://github.com/VincidaB)
 
 
-## contribute
+## Contribute
 
 
 To not add notebook outputs to commits : 
