@@ -4,7 +4,7 @@ All of the tests run everytime something is pushed to the repository, or when a 
 
 ## Installation
 
-To install the code, you can use the following command from the root of the repo (preferably in a virtual environment) :
+To install the required libraries, you can use the following command from the root of the repo (preferably in a virtual environment) :
 
 ```bash
 pip install -e .
