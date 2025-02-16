@@ -1,6 +1,8 @@
-# bpc_teamname
+# bpc_na_vinci_code
 
-This is teamname's Bin Picking Challenge repository.
+![Tests](https://github.com/VincidaB/bpc_na_vinci_code/actions/workflows/tests.yml/badge.svg)
+
+This is Na Vinci Code's Bin Picking Challenge repository.
 
 Our solution offers a solution to the problem of 6D pose estimation of seen objects.
 
