@@ -1,7 +1,7 @@
 # These requirements are from the bpc_baseline repo
 # https://github.com/CIRP-Lab/bpc_baseline
 # Core numeric / ML
-numpy==1.26.4
+numpy==2.1.1
 scipy==1.14.0
 opencv-python==4.8.0.74
 torch==2.3.0
