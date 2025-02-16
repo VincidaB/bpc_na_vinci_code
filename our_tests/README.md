@@ -29,3 +29,8 @@ To run all the tests, you can use the following command from the root of the rep
 ```bash
 tox
 ```
+
+## Adding tests
+
+New tests should be added in the `our_tests/` directory. The tests should be named `test_<name>.py` where `<name>` is the name of the module you are testing.
+The tests function should be named `test_<name_of_the_function>`. You can use the `pytest` framework to write your tests (see documentation [here](https://docs.pytest.org/en/stable/)).
