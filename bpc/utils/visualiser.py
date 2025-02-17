@@ -14,7 +14,7 @@ cameras = ["cam1", "cam2", "cam3"]
 def image_path(
     split: str, scene_id: int, image_id: int, modality: str, camera: str
 ) -> str:
-    if split == "train_pbr":
+    if split == "train_pbr" and modality != "depth":
         ext = "jpg"
     else:
         ext = "png"
