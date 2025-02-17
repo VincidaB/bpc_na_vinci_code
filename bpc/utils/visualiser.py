@@ -5,11 +5,7 @@ import json
 import open3d.visualization.gui as gui
 import open3d.t.geometry as tgeometry
 import random
-
-dataset_path = "/media/vincent/more/bpc_teamname/datasets/ipd"
-split = "test"
-scene_id = 0
-img_id = 0
+import argparse
 
 modalities = ["rgb", "depth"]
 cameras = ["cam1", "cam2", "cam3"]
@@ -46,80 +42,42 @@ def get_camera_extrinsics(
     return data[str(image_id)]["cam_R_w2c"], data[str(image_id)]["cam_t_w2c"]
 
 
-rgb_images = [
-    cv2.imread(image_path(split, scene_id, img_id, "rgb", camera)) for camera in cameras
-]
-depth_images = [
-    cv2.imread(
-        image_path(split, scene_id, img_id, "depth", camera), cv2.IMREAD_UNCHANGED
-    )
-    for camera in cameras
-]
-
-camera_intrinsics = [
-    get_camera_intrinsic(split, scene_id, img_id, camera) for camera in cameras
-]
-camera_extrinsics = [
-    get_camera_extrinsics(split, scene_id, img_id, camera) for camera in cameras
-]
-
-# create a point cloud from depth images, for now just from the first camera
-#depth_image = depth_images[0]
-#rgb_image = rgb_images[0]
-
-RESIZE_FACTOR = 0.5
-
-#depth_image = cv2.resize(depth_image, (0, 0), fx=RESIZE_FACTOR, fy=RESIZE_FACTOR)
-#rgb_image = cv2.resize(rgb_image, (0, 0), fx=RESIZE_FACTOR, fy=RESIZE_FACTOR)
-
-# camera intrinsics
-# create a point cloud from depth image
-cam_k = camera_intrinsics[0]
-fx = cam_k[0] * RESIZE_FACTOR
-fy = cam_k[4] * RESIZE_FACTOR
-cx = cam_k[2] * RESIZE_FACTOR
-cy = cam_k[5] * RESIZE_FACTOR
-
-print(fx, fy, cx, cy)
-print("cam_k")
-print(cam_k)
-
-#factor = 10000.0
-#depth = depth_image.astype(float) / factor
-#rows, cols = depth.shape
-#c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
-#Z = depth
-#X = (c - cx) * Z / fx
-#Y = (r - cy) * Z / fy
-#pcd = o3d.geometry.PointCloud()
-#pcd.points = o3d.utility.Vector3dVector(np.dstack((X, Y, Z)).reshape(-1, 3))
-#pcd.colors = o3d.utility.Vector3dVector(rgb_image.reshape(-1, 3) / 255.0)
-#pcd_t = tgeometry.PointCloud.from_legacy(pcd)
-
-
 class camera_pov:
-    def __init__(self, camera_intrinsics, camera_extrinsics, rgb_image, depth_image, resize_factor=1.0):
+    # TODO : camera extrinsics need to be converted to m and changed to the correct frame
+
+    def __init__(
+        self,
+        camera_intrinsics,
+        camera_extrinsics,
+        rgb_image,
+        depth_image,
+        resize_factor=1.0,
+    ):
         self.camera_intrinsics = camera_intrinsics
         self.camera_extrinsics = camera_extrinsics
         self.rgb_image = rgb_image
         self.depth_image = depth_image
-        
+
         self.point_cloud = None
         self.false_color = False
 
         if resize_factor != 1.0:
-            self.depth_image = cv2.resize(depth_image, (0, 0), fx=resize_factor, fy=resize_factor)
-            self.rgb_image = cv2.resize(rgb_image, (0, 0), fx=resize_factor, fy=resize_factor)
-            # TODO : verify we are only scaling the camera intrinsics and not the last value which is 1.0
+            self.depth_image = cv2.resize(
+                depth_image, (0, 0), fx=resize_factor, fy=resize_factor
+            )
+            self.rgb_image = cv2.resize(
+                rgb_image, (0, 0), fx=resize_factor, fy=resize_factor
+            )
             print(self.camera_intrinsics)
-            self.camera_intrinsics[:-1] = [i * resize_factor for i in camera_intrinsics[:-1]]
+            self.camera_intrinsics[:-1] = [
+                i * resize_factor for i in camera_intrinsics[:-1]
+            ]
             print("Resized camera intrinsics")
             print(self.camera_intrinsics)
 
     def get_point_cloud(self) -> tgeometry.PointCloud:
         if self.point_cloud != None:
             return self.point_cloud
-        
 
         depth_factor = 10000.0
 
@@ -127,8 +85,8 @@ class camera_pov:
         rows, cols = depth.shape
         c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
         Z = depth
-        X = (c - cx) * Z / fx
-        Y = (r - cy) * Z / fy
+        X = (c - self.camera_intrinsics[2]) * Z / self.camera_intrinsics[0]
+        Y = (r - self.camera_intrinsics[5]) * Z / self.camera_intrinsics[4]
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(np.dstack((X, Y, Z)).reshape(-1, 3))
         pcd.colors = o3d.utility.Vector3dVector(self.rgb_image.reshape(-1, 3) / 255.0)
@@ -144,15 +102,17 @@ class PointCloudVisualizer:
         self.pov_cams = {}
 
         gui.Application.instance.initialize()
-        self.window = gui.Application.instance.create_window("Point cloud pov viewer", 1920, 1080)
+        self.window = gui.Application.instance.create_window(
+            "Point cloud camera pov viewer", 1920, 1080
+        )
 
         self.scene = gui.SceneWidget()
         self.scene.scene = o3d.visualization.rendering.Open3DScene(self.window.renderer)
 
         self.scene.scene.set_background([1, 1, 1, 1])
         self.scene.scene.scene.set_sun_light(
-            [-1, -1, -1], [1, 1, 1], 100000  
-        ) # direction # color # intensity
+            [-1, -1, -1], [1, 1, 1], 100000
+        )  # direction # color # intensity
         self.scene.scene.scene.enable_sun_light(True)
         bbox = o3d.geometry.AxisAlignedBoundingBox([-1, -1, -1], [1, 1, 1])
         self.scene.setup_camera(60, bbox, [0, 0, 0])
@@ -172,7 +132,9 @@ class PointCloudVisualizer:
         self._color_clouds_button = gui.Button("Toggle false colors")
         self._color_clouds_button.horizontal_padding_em = 0.5
         self._color_clouds_button.vertical_padding_em = 0
-        self._color_clouds_button.set_on_clicked(lambda: self.change_point_clouds_color())
+        self._color_clouds_button.set_on_clicked(
+            lambda: self.change_point_clouds_color()
+        )
 
         self._lit_unlit_button = gui.Button("Lit / Unlit")
         self._lit_unlit_button.horizontal_padding_em = 0.5
@@ -212,7 +174,7 @@ class PointCloudVisualizer:
         material.base_color = [1, 0, 0, 1]
         self.scene.scene.add_geometry("cube", cube_t, material)
 
-    def add_point_cloud(self, pov_cam : camera_pov, name="point_cloud"):
+    def add_point_cloud(self, pov_cam: camera_pov, name="point_cloud"):
         if self.scene.scene.has_geometry(name):
             name = name + "_1"
         print(f"Adding point cloud with name '{name}'")
@@ -223,17 +185,15 @@ class PointCloudVisualizer:
         # adding the camera pov to the dictionary with it's name as the key
         self.pov_cams[name] = pov_cam
 
-    # TODO : change this from using rgb_image to using a `point_of_view` object
-    # TODO : The `point_of_view` object needs to be created and will hold the camera intrinsics and extrinsics, 
-    # TODO :    the rgb_image and the depth_image, the state of the coloring
     def change_point_clouds_color(self):
         for name, pov_cam in self.pov_cams.items():
-            
+
             if pov_cam.false_color:
                 print("Changing back to the original color")
                 pov_cam.false_color = False
                 pov_cam.point_cloud.point["colors"] = o3d.core.Tensor(
-                    pov_cam.rgb_image.reshape(-1, 3) / 255.0, dtype=o3d.core.Dtype.Float32
+                    pov_cam.rgb_image.reshape(-1, 3) / 255.0,
+                    dtype=o3d.core.Dtype.Float32,
                 )
             else:
                 # use the name of the camera to determine the color
@@ -276,11 +236,72 @@ class PointCloudVisualizer:
 
 
 if __name__ == "__main__":
+    print(
+        "██████╗  ██████╗ ██╗███╗   ██╗████████╗     ██████╗██╗      ██████╗ ██╗   ██╗██████╗\n██╔══██╗██╔═══██╗██║████╗  ██║╚══██╔══╝    ██╔════╝██║     ██╔═══██╗██║   ██║██╔══██╗\n██████╔╝██║   ██║██║██╔██╗ ██║   ██║       ██║     ██║     ██║   ██║██║   ██║██║  ██║\n██╔═══╝ ██║   ██║██║██║╚██╗██║   ██║       ██║     ██║     ██║   ██║██║   ██║██║  ██║\n██║     ╚██████╔╝██║██║ ╚████║   ██║       ╚██████╗███████╗╚██████╔╝╚██████╔╝██████╔╝\n╚═╝      ╚═════╝ ╚═╝╚═╝  ╚═══╝   ╚═╝        ╚═════╝╚══════╝ ╚═════╝  ╚═════╝ ╚═════╝\n\n██╗   ██╗██╗███████╗██╗    ██╗███████╗██████╗\n██║   ██║██║██╔════╝██║    ██║██╔════╝██╔══██╗\n██║   ██║██║█████╗  ██║ █╗ ██║█████╗  ██████╔╝\n╚██╗ ██╔╝██║██╔══╝  ██║███╗██║██╔══╝  ██╔══██╗\n ╚████╔╝ ██║███████╗╚███╔███╔╝███████╗██║  ██║\n  ╚═══╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚══════╝╚═╝  ╚═╝"
+    )
+    parser = argparse.ArgumentParser(description="Point Cloud Visualizer")
+    parser.add_argument("dataset_path", type=str, help="Path to the dataset")
+    parser.add_argument("--scene-id", type=int, default=0, help="Scene ID (default: 0)")
+    parser.add_argument("--image-id", type=int, default=0, help="Image ID (default: 0)")
+    parser.add_argument(
+        "--split", type=str, default="test", help="Dataset split (default: test)"
+    )
+    parser.add_argument(
+        "--resize-factor",
+        type=float,
+        default=1.0,
+        help="Resize factor for images (default: 1.0)",
+    )
+    args = parser.parse_args()
+
+    dataset_path = args.dataset_path
+    scene_id = args.scene_id
+    img_id = args.image_id
+    split = args.split
+    RESIZE_FACTOR = args.resize_factor
+
+    rgb_images = [
+        cv2.imread(image_path(split, scene_id, img_id, "rgb", camera))
+        for camera in cameras
+    ]
+    depth_images = [
+        cv2.imread(
+            image_path(split, scene_id, img_id, "depth", camera), cv2.IMREAD_UNCHANGED
+        )
+        for camera in cameras
+    ]
+
+    camera_intrinsics = [
+        get_camera_intrinsic(split, scene_id, img_id, camera) for camera in cameras
+    ]
+    camera_extrinsics = [
+        get_camera_extrinsics(split, scene_id, img_id, camera) for camera in cameras
+    ]
+
     visualizer = PointCloudVisualizer()
-    pov_cam1 = camera_pov(camera_intrinsics[0], camera_extrinsics[0], rgb_images[0], depth_images[0], resize_factor=RESIZE_FACTOR)
-    pov_cam2 = camera_pov(camera_intrinsics[1], camera_extrinsics[1], rgb_images[1], depth_images[1], resize_factor=RESIZE_FACTOR)
-    pov_cam3 = camera_pov(camera_intrinsics[2], camera_extrinsics[2], rgb_images[2], depth_images[2], resize_factor=RESIZE_FACTOR)
+    pov_cam1 = camera_pov(
+        camera_intrinsics[0],
+        camera_extrinsics[0],
+        rgb_images[0],
+        depth_images[0],
+        resize_factor=RESIZE_FACTOR,
+    )
+    pov_cam2 = camera_pov(
+        camera_intrinsics[1],
+        camera_extrinsics[1],
+        rgb_images[1],
+        depth_images[1],
+        resize_factor=RESIZE_FACTOR,
+    )
+    pov_cam3 = camera_pov(
+        camera_intrinsics[2],
+        camera_extrinsics[2],
+        rgb_images[2],
+        depth_images[2],
+        resize_factor=RESIZE_FACTOR,
+    )
     visualizer.add_point_cloud(pov_cam1, "cam_1")
     visualizer.add_point_cloud(pov_cam2, "cam_2")
     visualizer.add_point_cloud(pov_cam3, "cam_3")
+    # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
     visualizer.run()
