@@ -1,6 +1,7 @@
 import open3d as o3d
 import cv2
 import numpy as np
+import json
 
 dataset_path = "/media/vincent/more/bpc_teamname/datasets/ipd"
 split = "test"
@@ -11,12 +12,35 @@ modalities = ["rgb", "depth"]
 cameras = ["cam1", "cam2", "cam3"]
 
 
-def image_path(split, scene_id, image_id, modality, camera):
+def image_path(
+    split: str, scene_id: int, image_id: int, modality: str, camera: str
+) -> str:
     if split == "train_pbr":
         ext = "jpg"
     else:
         ext = "png"
     return f"{dataset_path}/{split}/{scene_id:06d}/{modality}_{camera}/{image_id:06d}.{ext}"
+
+
+def camera_json_path(split: str, scene_id: int, camera: str) -> str:
+    return f"{dataset_path}/{split}/{scene_id:06d}/scene_camera_{camera}.json"
+
+
+def get_camera_intrinsic(
+    split: str, scene_id: int, image_id: int, camera: str
+) -> list[float]:
+    with open(camera_json_path(split, scene_id, camera)) as f:
+        data = json.load(f)
+    return data[str(image_id)]["cam_K"]
+
+
+def get_camera_extrinsics(
+    split: str, scene_id: int, image_id: int, camera: str
+) -> tuple[list[float], list[float]]:
+    with open(camera_json_path(split, scene_id, camera)) as f:
+        data = json.load(f)
+
+    return data[str(image_id)]["cam_R_w2c"], data[str(image_id)]["cam_t_w2c"]
 
 
 rgb_images = [
@@ -29,8 +53,11 @@ depth_images = [
     for camera in cameras
 ]
 
-# create a point cloud from depth images, for now just from the first camera
+caemra_intrinsics = [
+    get_camera_intrinsic(split, scene_id, img_id, camera) for camera in cameras
+]
 
+# create a point cloud from depth images, for now just from the first camera
 depth_image = depth_images[0]
 rgb_image = rgb_images[0]
 
