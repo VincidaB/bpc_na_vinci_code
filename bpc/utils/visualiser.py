@@ -7,6 +7,7 @@ import open3d.t.geometry as tgeometry
 import random
 import argparse
 import time
+from scipy.spatial.transform import Rotation
 
 modalities = ["rgb", "depth"]
 cameras = ["cam1", "cam2", "cam3"]
@@ -41,6 +42,41 @@ def get_camera_extrinsics(
         data = json.load(f)
 
     return data[str(image_id)]["cam_R_w2c"], data[str(image_id)]["cam_t_w2c"]
+
+
+def camera_pose_from_extrinsics(
+    R: list[float], t: list[float]
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Converts the camera extrinsics to a pose and rotation in the world frame
+    """
+    r_mat = np.array(R).reshape(3, 3)
+    r = Rotation.from_matrix(r_mat)
+    r_inv = r.inv()
+    # q = r_inv.as_quat()
+    trans = r_mat.T @ np.array(t)
+    trans /= -1000.0  # convert to meters
+    # return q, trans
+    return r_inv.as_matrix(), trans
+
+
+def generate_axes(scale: float) -> list[o3d.geometry.LineSet]:
+    points = [
+        [0, 0, 0],
+        [scale, 0, 0],
+        [0, scale, 0],
+        [0, 0, scale],
+    ]
+    lines = [[0, 1], [0, 2], [0, 3]]
+    colors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+    line_set = o3d.geometry.LineSet(
+        points=o3d.utility.Vector3dVector(points),
+        lines=o3d.utility.Vector2iVector(lines),
+    )
+    line_set.colors = o3d.utility.Vector3dVector(colors)
+    return [
+        line_set,
+    ]
 
 
 class camera_pov:
@@ -181,12 +217,24 @@ class PointCloudVisualizer:
         material.base_color = [1, 0, 0, 1]
         self.scene.scene.add_geometry("cube", cube_t, material)
 
-    def add_point_cloud(self, pov_cam: camera_pov, name="point_cloud"):
+        axis = generate_axes(1.0)
+        # make lines thicker
+        material = o3d.visualization.rendering.MaterialRecord()
+        material.shader = "defaultUnlit"
+        material.line_width = 10
+        self.scene.scene.add_geometry("axes", axis[0], material)
+
+    def add_point_cloud(self, pov_cam: camera_pov, name="point_cloud", pose=None):
         if self.scene.scene.has_geometry(name):
             name = name + "_1"
         print(f"Adding point cloud with name '{name}'")
         material = o3d.visualization.rendering.MaterialRecord()
         material.shader = "defaultUnlit"
+        if pose is not None:
+            r = o3d.core.Tensor(pose[0], dtype=o3d.core.Dtype.Float32)
+            center = o3d.core.Tensor([0, 0, 0], dtype=o3d.core.Dtype.Float32)
+            pov_cam.get_point_cloud().rotate(r, center)
+            pov_cam.get_point_cloud().translate(pose[1])
         self.scene.scene.add_geometry(name, pov_cam.get_point_cloud(), material)
         print(f"Added point cloud with name '{name}'")
         # adding the camera pov to the dictionary with it's name as the key
@@ -335,8 +383,22 @@ if __name__ == "__main__":
         depth_images[2],
         resize_factor=RESIZE_FACTOR,
     )
-    visualizer.add_point_cloud(pov_cam1, "cam1")
-    visualizer.add_point_cloud(pov_cam2, "cam2")
-    visualizer.add_point_cloud(pov_cam3, "cam3")
+
+    visualizer.add_point_cloud(
+        pov_cam1,
+        "cam1",
+        camera_pose_from_extrinsics(camera_extrinsics[0][0], camera_extrinsics[0][1]),
+    )
+    visualizer.add_point_cloud(
+        pov_cam2,
+        "cam2",
+        camera_pose_from_extrinsics(camera_extrinsics[1][0], camera_extrinsics[1][1]),
+    )
+    visualizer.add_point_cloud(
+        pov_cam3,
+        "cam3",
+        camera_pose_from_extrinsics(camera_extrinsics[2][0], camera_extrinsics[2][1]),
+    )
+
     # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
     visualizer.run()
