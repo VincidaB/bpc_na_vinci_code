@@ -142,11 +142,17 @@ class PointCloudVisualizer:
         self._lit_unlit_button.vertical_padding_em = 0
         self._lit_unlit_button.set_on_clicked(self.set_lit_unlit)
 
+        self._icp_button = gui.Button("ICP")
+        self._icp_button.horizontal_padding_em = 0.5
+        self._icp_button.vertical_padding_em = 0
+        self._icp_button.set_on_clicked(self.icp)
+
         view_ctrls.add_child(gui.Label("Controls"))
         h = gui.Horiz(0.25 * em)  # row 1
         h.add_stretch()
         h.add_child(self._color_clouds_button)
         h.add_child(self._lit_unlit_button)
+        h.add_child(self._icp_button)
         h.add_stretch()
         view_ctrls.add_child(h)
 
@@ -220,6 +226,31 @@ class PointCloudVisualizer:
         material.shader = "defaultLit" if self.lit else "defaultUnlit"
         self.scene.scene.update_material(material)
 
+    def icp(self):
+        print("Running ICP with one iteration between cam1 and cam2 (hardcoded)")
+        source = self.pov_cams["cam1"].get_point_cloud().to_legacy()
+        target = self.pov_cams["cam2"].get_point_cloud().to_legacy()
+        target.estimate_normals(
+            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+        )
+        threshold = 0.02
+        reg_p2l = o3d.pipelines.registration.registration_icp(
+            source,
+            target,
+            threshold,
+            np.identity(4),
+            o3d.pipelines.registration.TransformationEstimationPointToPlane(),
+            o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=1),
+        )
+        self.pov_cams["cam1"].get_point_cloud().transform(reg_p2l.transformation)
+        print("ICP transformation:")
+        print(reg_p2l.transformation)
+        self.scene.scene.scene.update_geometry(
+            "cam1",
+            self.pov_cams["cam1"].get_point_cloud(),
+            o3d.visualization.rendering.Scene.UPDATE_POINTS_FLAG,
+        )
+
     def _on_layout(self, layout_context):
         r = self.window.content_rect
         self.scene.frame = r
@@ -235,8 +266,9 @@ class PointCloudVisualizer:
     def run(self):
 
         # could also use run_in_thread, cf https://www.open3d.org/docs/latest/python_api/open3d.visualization.gui.Application.html#open3d.visualization.gui.Application
-        while(gui.Application.instance.run_one_tick()):
-            time.sleep(1/60) #60 fps
+        while gui.Application.instance.run_one_tick():
+            time.sleep(1 / 60)  # 60 fps
+
 
 if __name__ == "__main__":
     print(
