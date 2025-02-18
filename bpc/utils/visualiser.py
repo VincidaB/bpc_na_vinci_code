@@ -231,8 +231,8 @@ class PointCloudVisualizer:
         material = o3d.visualization.rendering.MaterialRecord()
         material.shader = "defaultUnlit"
         if pose is not None:
-            r = o3d.core.Tensor(pose[0], dtype=o3d.core.Dtype.Float32)
-            center = o3d.core.Tensor([0, 0, 0], dtype=o3d.core.Dtype.Float32)
+            r = np.array(pose[0], dtype=np.float64)
+            center = np.array([0, 0, 0], dtype=np.float64)
             pov_cam.get_point_cloud().rotate(r, center)
             pov_cam.get_point_cloud().translate(pose[1])
         self.scene.scene.add_geometry(name, pov_cam.get_point_cloud(), material)
@@ -267,6 +267,24 @@ class PointCloudVisualizer:
                 )
             else:
                 print(f"No geometry with the name '{name}' found")
+
+    def add_ply_mesh(self, path: str, name: str, pose=None):
+        if self.scene.scene.has_geometry(name):
+            name = name + "_1"
+        print(f"Adding ply with name '{name}'")
+        ply = o3d.io.read_triangle_mesh(path)
+        # scale down to meters
+        ply.scale(1 / 1000, center=[0, 0, 0])
+        material = o3d.visualization.rendering.MaterialRecord()
+        material.shader = "defaultUnlit"
+        np.random.seed(sum(ord(char) for char in name))
+        material.base_color = np.append(np.random.rand(3), 1)
+        if pose is not None:
+            r = pose[0]
+            ply.rotate(r, center=[0, 0, 0])
+            ply.translate(pose[1])
+        self.scene.scene.add_geometry(name, ply, material)
+        print(f"Added ply with name '{name}'")
 
     def set_lit_unlit(self):
         material = o3d.visualization.rendering.MaterialRecord()
@@ -398,6 +416,13 @@ if __name__ == "__main__":
         pov_cam3,
         "cam3",
         camera_pose_from_extrinsics(camera_extrinsics[2][0], camera_extrinsics[2][1]),
+    )
+
+    # TODO add option to add ply in the frame of of the cameras, currently it is in the world frame
+    visualizer.add_ply_mesh(
+        f"{dataset_path}/ipd_models/models/obj_000018.ply",
+        "obj18",
+        pose=(np.identity(3), [0, 0, 1.4]),
     )
 
     # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
