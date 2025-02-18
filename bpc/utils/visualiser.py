@@ -6,6 +6,7 @@ import open3d.visualization.gui as gui
 import open3d.t.geometry as tgeometry
 import random
 import argparse
+import time
 
 modalities = ["rgb", "depth"]
 cameras = ["cam1", "cam2", "cam3"]
@@ -232,8 +233,10 @@ class PointCloudVisualizer:
         self._settings_panel.frame = gui.Rect(r.get_right() - width, r.y, width, height)
 
     def run(self):
-        gui.Application.instance.run()
 
+        # could also use run_in_thread, cf https://www.open3d.org/docs/latest/python_api/open3d.visualization.gui.Application.html#open3d.visualization.gui.Application
+        while(gui.Application.instance.run_one_tick()):
+            time.sleep(1/60) #60 fps
 
 if __name__ == "__main__":
     print(
@@ -300,8 +303,8 @@ if __name__ == "__main__":
         depth_images[2],
         resize_factor=RESIZE_FACTOR,
     )
-    visualizer.add_point_cloud(pov_cam1, "cam_1")
-    visualizer.add_point_cloud(pov_cam2, "cam_2")
-    visualizer.add_point_cloud(pov_cam3, "cam_3")
+    visualizer.add_point_cloud(pov_cam1, "cam1")
+    visualizer.add_point_cloud(pov_cam2, "cam2")
+    visualizer.add_point_cloud(pov_cam3, "cam3")
     # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
     visualizer.run()
