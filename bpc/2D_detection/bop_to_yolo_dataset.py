@@ -57,12 +57,12 @@ def create_yaml_file(output_dir: str, classes_map: dict):
 
 
 def create_labels(
-        dataset_dir:str,
-        split: str,
-        modalities: list,
-        labels_dir: str,
-        class_map: dict,
-        ):
+    dataset_dir: str,
+    split: str,
+    modalities: list,
+    labels_dir: str,
+    class_map: dict,
+):
 
     camera_gt_map = {
         "rgb_cam1": "scene_gt_cam1.json",
