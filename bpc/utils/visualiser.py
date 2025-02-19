@@ -60,25 +60,6 @@ def camera_pose_from_extrinsics(
     return r_inv.as_matrix(), trans
 
 
-def generate_axes(scale: float) -> list[o3d.geometry.LineSet]:
-    points = [
-        [0, 0, 0],
-        [scale, 0, 0],
-        [0, scale, 0],
-        [0, 0, scale],
-    ]
-    lines = [[0, 1], [0, 2], [0, 3]]
-    colors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
-    line_set = o3d.geometry.LineSet(
-        points=o3d.utility.Vector3dVector(points),
-        lines=o3d.utility.Vector2iVector(lines),
-    )
-    line_set.colors = o3d.utility.Vector3dVector(colors)
-    return [
-        line_set,
-    ]
-
-
 class camera_pov:
     # TODO : camera extrinsics need to be converted to m and changed to the correct frame
 
@@ -137,6 +118,7 @@ class PointCloudVisualizer:
         self.lit = False
 
         self.pov_cams = {}
+        self.models = {} # models in the scene
 
         gui.Application.instance.initialize()
         self.window = gui.Application.instance.create_window(
@@ -217,12 +199,8 @@ class PointCloudVisualizer:
         material.base_color = [1, 0, 0, 1]
         self.scene.scene.add_geometry("cube", cube_t, material)
 
-        axis = generate_axes(1.0)
-        # make lines thicker
-        material = o3d.visualization.rendering.MaterialRecord()
-        material.shader = "defaultUnlit"
-        material.line_width = 10
-        self.scene.scene.add_geometry("axes", axis[0], material)
+        self.scene.scene.show_axes(True)
+        
 
     def add_point_cloud(self, pov_cam: camera_pov, name="point_cloud", pose=None):
         if self.scene.scene.has_geometry(name):
@@ -284,6 +262,7 @@ class PointCloudVisualizer:
             ply.rotate(r, center=[0, 0, 0])
             ply.translate(pose[1])
         self.scene.scene.add_geometry(name, ply, material)
+        self.models[name] = ply
         print(f"Added ply with name '{name}'")
 
     def set_lit_unlit(self):
