@@ -7,11 +7,11 @@ from PIL import Image
 
 
 def create_symlinks(
-    dataset_dir,
-    split,
-    scene_ids,
-    modalities,
-    output_dir,
+    dataset_dir: str,
+    split: str,
+    scene_ids: list,
+    modalities: list,
+    output_dir: str,
 ):
     """
     creates symlinks for all images in dataset_dit/[scene_ids]/[modalities]/[].png or .tif
@@ -36,7 +36,7 @@ def create_symlinks(
                 )
 
 
-def create_yaml_file(output_dir, classes_map):
+def create_yaml_file(output_dir: str, classes_map: dict):
     """
     creates a yaml file for the dataset
     Args:
@@ -56,7 +56,13 @@ def create_yaml_file(output_dir, classes_map):
         f.write("]\n")
 
 
-def create_labels(dataset_dir, split, modalities, labels_dir, class_map):
+def create_labels(
+        dataset_dir:str,
+        split: str,
+        modalities: list,
+        labels_dir: str,
+        class_map: dict,
+        ):
 
     camera_gt_map = {
         "rgb_cam1": "scene_gt_cam1.json",
@@ -171,7 +177,7 @@ def create_labels(dataset_dir, split, modalities, labels_dir, class_map):
                         )
 
 
-def convert_ipd_to_yolo(output_dir):
+def convert_ipd_to_yolo(output_dir: str):
     # Define the IPD dataset directory
     ipd_dir = "../../datasets/ipd"
     script_dir = os.path.dirname(os.path.abspath(__file__))
