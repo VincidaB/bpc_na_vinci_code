@@ -118,7 +118,7 @@ class PointCloudVisualizer:
         self.lit = False
 
         self.pov_cams = {}
-        self.models = {} # models in the scene
+        self.models = {}  # models in the scene
 
         gui.Application.instance.initialize()
         self.window = gui.Application.instance.create_window(
@@ -200,7 +200,6 @@ class PointCloudVisualizer:
         self.scene.scene.add_geometry("cube", cube_t, material)
 
         self.scene.scene.show_axes(True)
-        
 
     def add_point_cloud(self, pov_cam: camera_pov, name="point_cloud", pose=None):
         if self.scene.scene.has_geometry(name):
