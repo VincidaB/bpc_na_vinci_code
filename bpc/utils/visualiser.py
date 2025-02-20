@@ -103,7 +103,6 @@ class camera_pov:
         if self.point_cloud != None:
             return self.point_cloud
 
-
         depth = self.depth_image.astype(float) / self.depth_factor
         rows, cols = depth.shape
         c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
@@ -115,6 +114,39 @@ class camera_pov:
         pcd.colors = o3d.utility.Vector3dVector(self.rgb_image.reshape(-1, 3) / 255.0)
         self.point_cloud = tgeometry.PointCloud.from_legacy(pcd)
         return self.point_cloud
+
+
+def detections_to_position(
+    detection: list, cameras: list[camera_pov]
+) -> list[np.ndarray]:
+    """
+    converts the 2D detection to a 3D position in the camera frame
+    returns a list of len the number of cameras, each element is a list of 3D points in the camera frame
+    """
+
+    if len(detection) != len(cameras):
+        raise ValueError("Number of cameras and detections do not match")
+
+    positions = []
+
+    for i, camera in enumerate(cameras):
+        positions.append([])
+        K = np.array(camera.camera_intrinsics).reshape(3, 3)
+        K_inv = np.linalg.inv(K)
+        depth_image = camera.depth_image.astype(float)
+        for box in results[i].boxes:
+            # point_2 is the 2D detection (in pixels)
+            point_2 = np.array(box.xywh.cpu())[0, :2]
+            point_2 = point_2 * RESIZE_FACTOR
+
+            # distance away from the camera using the depth image
+            d = depth_image[int(point_2[1]), int(point_2[0])] / camera.depth_factor
+            # project the 2D detection to a point in 3D space
+            pixel_homog = np.array([point_2[0], point_2[1], 1.0])
+            point_2_3D_cam_frame = (K_inv @ pixel_homog) * d
+            positions[i].append(point_2_3D_cam_frame)
+    print(positions)
+    return positions
 
 
 class PointCloudVisualizer:
@@ -439,7 +471,6 @@ if __name__ == "__main__":
     #    pose=(rot, [-0.25, -0.1, 1.75]),
     # )
 
-    # TODO cleanup all of the code below : add a function to draw lines, draw speheres on candidates, loop through all of them and do cool stuff
     # open pickle file of the 2D detection results, and lets draw lines from the camera to the 2D detections for now
     results_file_path = (
         "/media/vincent/more/bpc_teamname/bpc/2D_detection/test000000_000000.pkl"
@@ -450,127 +481,25 @@ if __name__ == "__main__":
     with open(results_file_path, "rb") as f:
         results = pickle.load(f)
 
-    # print(type(results))
-    # print(len(results))
-    # print(results[0])
-    # print("results[0].boxes[0] : ")
-    # print(results[0].boxes[0])
-    # xywh: tensor([[1716.1079, 1240.1752,  293.4056,  303.8218]], device='cuda:0')
-    # xywhn: tensor([[0.4469, 0.5742, 0.0764, 0.1407]], device='cuda:0')
-    # xyxy: tensor([[1569.4050, 1088.2643, 1862.8107, 1392.0861]], device='cuda:0')
-    # xyxyn: tensor([[0.4087, 0.5038, 0.4851, 0.6445]], device='cuda:0')
-    ## draw a line from the camera to the 2D detection ##
+    det_pos_cam_frame = detections_to_position(results, [pov_cam1, pov_cam2, pov_cam3])
 
-    for box in results[0].boxes:
-        # point_2 is the 2D detection
-        point_2 = np.array(box.xywh.cpu())[0, :2]  # in pixels
-        point_2 = (
-            point_2 * RESIZE_FACTOR
-        )  # scaling down as the iamge is resized, but was not done when YOLO detection was run
+    colors = [[1, 0, 0, 0.75], [0, 1, 0, 0.75], [0, 0, 1, 0.75]]
+    for i in range(len(det_pos_cam_frame)):
+        for j in range(len(det_pos_cam_frame[i])):
+            red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
+            red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
+            material = o3d.visualization.rendering.MaterialRecord()
 
-        # get the camera intrinsics
-        K = np.array(camera_intrinsics[0]).reshape(3, 3)
-
-        # distance away from the camera
-        d = (
-            pov_cam1.depth_image.astype(float)[int(point_2[1]), int(point_2[0])]
-            / 10000.0
-        )
-        import copy
-
-        # project the 2D detection to a point in 3D space
-        pixel_homog = np.array([point_2[0], point_2[1], 1.0])
-        K_inv = np.linalg.inv(K)
-        point_2_3D = (K_inv @ pixel_homog) * d
-        point_2_3D_camera_frame = copy.deepcopy(point_2_3D)
-
-        red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
-        red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
-        # red_sphere_t.translate(point_1, False)
-        material = o3d.visualization.rendering.MaterialRecord()
-        material.shader = "defaultUnlit"
-        material.base_color = [1, 0, 0, 0.5]
-        visualizer.add_object_in_camera_frame(
-            red_sphere_t,
-            (np.eye(3), point_2_3D_camera_frame),
-            "cam1",
-            material,
-            name=f"detection",
-        )
-
-    for box in results[1].boxes:
-        # point_2 is the 2D detection
-        point_2 = np.array(box.xywh.cpu())[0, :2]  # in pixels
-        point_2 = (
-            point_2 * RESIZE_FACTOR
-        )  # scaling down as the iamge is resized, but was not done when YOLO detection was run
-
-        # get the camera intrinsics
-        K = np.array(camera_intrinsics[0]).reshape(3, 3)
-
-        # distance away from the camera
-        d = (
-            pov_cam2.depth_image.astype(float)[int(point_2[1]), int(point_2[0])]
-            / 10000.0
-        )
-        import copy
-
-        # project the 2D detection to a point in 3D space
-        pixel_homog = np.array([point_2[0], point_2[1], 1.0])
-        K_inv = np.linalg.inv(K)
-        point_2_3D = (K_inv @ pixel_homog) * d
-        point_2_3D_camera_frame = copy.deepcopy(point_2_3D)
-
-        red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
-        red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
-        # red_sphere_t.translate(point_1, False)
-        material = o3d.visualization.rendering.MaterialRecord()
-        material.shader = "defaultUnlit"
-        material.base_color = [0, 1, 0, 0.5]
-        visualizer.add_object_in_camera_frame(
-            red_sphere_t,
-            (np.eye(3), point_2_3D_camera_frame),
-            "cam2",
-            material,
-            name=f"detection",
-        )
-
-    for box in results[2].boxes:
-        # point_2 is the 2D detection
-        point_2 = np.array(box.xywh.cpu())[0, :2]  # in pixels
-        point_2 = (
-            point_2 * RESIZE_FACTOR
-        )  # scaling down as the iamge is resized, but was not done when YOLO detection was run
-
-        # get the camera intrinsics
-        K = np.array(camera_intrinsics[0]).reshape(3, 3)
-
-        # distance away from the camera
-        d = (
-            pov_cam3.depth_image.astype(float)[int(point_2[1]), int(point_2[0])]
-            / 10000.0
-        )
-        import copy
-
-        # project the 2D detection to a point in 3D space
-        pixel_homog = np.array([point_2[0], point_2[1], 1.0])
-        K_inv = np.linalg.inv(K)
-        point_2_3D = (K_inv @ pixel_homog) * d
-        point_2_3D_camera_frame = copy.deepcopy(point_2_3D)
-
-        red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
-        red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
-        # red_sphere_t.translate(point_1, False)
-        material = o3d.visualization.rendering.MaterialRecord()
-        material.shader = "defaultUnlit"
-        material.base_color = [0, 0, 1, 0.5]
-        visualizer.add_object_in_camera_frame(
-            red_sphere_t,
-            (np.eye(3), point_2_3D_camera_frame),
-            "cam3",
-            material,
-            name=f"detection",
-        )
+            # I would really like this to be `Unlit` but it is crashing open3D
+            material.shader = "defaultLitTransparency"
+            material.base_color = colors[i]
+            visualizer.add_object_in_camera_frame(
+                red_sphere_t,
+                (np.eye(3), det_pos_cam_frame[i][j]),
+                f"cam{i+1}",
+                material,
+                name=f"detection",
+            )
 
     # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
     visualizer.run()
