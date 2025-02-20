@@ -94,14 +94,17 @@ class camera_pov:
             ]
             print("Resized camera intrinsics")
             print(self.camera_intrinsics)
+        self.resize_factor = resize_factor
+
+        # TODO : get the depth factor from the json file
+        self.depth_factor = 1000.0 * 10.0
 
     def get_point_cloud(self) -> tgeometry.PointCloud:
         if self.point_cloud != None:
             return self.point_cloud
 
-        depth_factor = 10000.0
 
-        depth = self.depth_image.astype(float) / depth_factor
+        depth = self.depth_image.astype(float) / self.depth_factor
         rows, cols = depth.shape
         c, r = np.meshgrid(np.arange(cols), np.arange(rows), sparse=True)
         Z = depth
