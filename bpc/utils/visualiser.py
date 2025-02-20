@@ -8,6 +8,8 @@ import random
 import argparse
 import time
 from scipy.spatial.transform import Rotation
+import pickle
+import torch
 
 modalities = ["rgb", "depth"]
 cameras = ["cam1", "cam2", "cam3"]
@@ -286,14 +288,42 @@ class PointCloudVisualizer:
             o3d.pipelines.registration.TransformationEstimationPointToPlane(),
             o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=1),
         )
-        self.pov_cams["cam1"].get_point_cloud().transform(reg_p2l.transformation)
+
         print("ICP transformation:")
         print(reg_p2l.transformation)
-        self.scene.scene.scene.update_geometry(
-            "cam1",
-            self.pov_cams["cam1"].get_point_cloud(),
-            o3d.visualization.rendering.Scene.UPDATE_POINTS_FLAG,
+        current_pose = self.scene.scene.get_geometry_transform("obj18")
+        new_pose = np.matmul(current_pose, reg_p2l.transformation)
+        self.scene.scene.set_geometry_transform(
+            "obj18", new_pose
+        )  # https://www.open3d.org/docs/release/python_api/open3d.visualization.rendering.Open3DScene.html
+        print(type(source))
+
+    def add_object_in_camera_frame(
+        self, object: o3d.geometry, pose, camera_name: str, material, name: str
+    ):
+        """
+        What do I want this function to do ?
+        - take a geometry object that has not been translated and rotated and place it in the camera frame ?
+        - `pose` is the pose of the object in the camera frame
+        - `camera_name` is the name of the camera
+        """
+        camera = self.pov_cams[camera_name]
+        # get the camera pose
+
+        Rc, Tc = camera_pose_from_extrinsics(
+            camera.camera_extrinsics[0], camera.camera_extrinsics[1]
         )
+        r, t = pose
+        # change the object to the camera frame
+        position = Rc @ t + Tc
+        object.translate(position)
+
+        if self.scene.scene.has_geometry(name):
+            name = name + "_1"
+            while self.scene.scene.has_geometry(name):
+                # increase the number at the end
+                name = name[:-1] + str(int(name[-1]) + 1)
+        self.scene.scene.add_geometry(name, object, material)
 
     def _on_layout(self, layout_context):
         r = self.window.content_rect
@@ -396,12 +426,148 @@ if __name__ == "__main__":
         camera_pose_from_extrinsics(camera_extrinsics[2][0], camera_extrinsics[2][1]),
     )
 
+    # used only to place a random object in the scene
+    rot = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]])
+
     # TODO add option to add ply in the frame of of the cameras, currently it is in the world frame
-    visualizer.add_ply_mesh(
-        f"{dataset_path}/ipd_models/models/obj_000018.ply",
-        "obj18",
-        pose=(np.identity(3), [0, 0, 1.4]),
+    # visualizer.add_ply_mesh(
+    #    f"{dataset_path}/ipd_models/models/obj_000018.ply",
+    #    "obj18",
+    #    pose=(rot, [-0.25, -0.1, 1.75]),
+    # )
+
+    # TODO cleanup all of the code below : add a function to draw lines, draw speheres on candidates, loop through all of them and do cool stuff
+    # open pickle file of the 2D detection results, and lets draw lines from the camera to the 2D detections for now
+    results_file_path = (
+        "/media/vincent/more/bpc_teamname/bpc/2D_detection/test000000_000000.pkl"
     )
+    results_file_path = (
+        "/media/vincent/more/bpc_teamname/bpc/2D_detection/val000000_000000.pkl"
+    )
+    with open(results_file_path, "rb") as f:
+        results = pickle.load(f)
+
+    # print(type(results))
+    # print(len(results))
+    # print(results[0])
+    # print("results[0].boxes[0] : ")
+    # print(results[0].boxes[0])
+    # xywh: tensor([[1716.1079, 1240.1752,  293.4056,  303.8218]], device='cuda:0')
+    # xywhn: tensor([[0.4469, 0.5742, 0.0764, 0.1407]], device='cuda:0')
+    # xyxy: tensor([[1569.4050, 1088.2643, 1862.8107, 1392.0861]], device='cuda:0')
+    # xyxyn: tensor([[0.4087, 0.5038, 0.4851, 0.6445]], device='cuda:0')
+    ## draw a line from the camera to the 2D detection ##
+
+    for box in results[0].boxes:
+        # point_2 is the 2D detection
+        point_2 = np.array(box.xywh.cpu())[0, :2]  # in pixels
+        point_2 = (
+            point_2 * RESIZE_FACTOR
+        )  # scaling down as the iamge is resized, but was not done when YOLO detection was run
+
+        # get the camera intrinsics
+        K = np.array(camera_intrinsics[0]).reshape(3, 3)
+
+        # distance away from the camera
+        d = (
+            pov_cam1.depth_image.astype(float)[int(point_2[1]), int(point_2[0])]
+            / 10000.0
+        )
+        import copy
+
+        # project the 2D detection to a point in 3D space
+        pixel_homog = np.array([point_2[0], point_2[1], 1.0])
+        K_inv = np.linalg.inv(K)
+        point_2_3D = (K_inv @ pixel_homog) * d
+        point_2_3D_camera_frame = copy.deepcopy(point_2_3D)
+
+        red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
+        red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
+        # red_sphere_t.translate(point_1, False)
+        material = o3d.visualization.rendering.MaterialRecord()
+        material.shader = "defaultUnlit"
+        material.base_color = [1, 0, 0, 0.5]
+        visualizer.add_object_in_camera_frame(
+            red_sphere_t,
+            (np.eye(3), point_2_3D_camera_frame),
+            "cam1",
+            material,
+            name=f"detection",
+        )
+
+    for box in results[1].boxes:
+        # point_2 is the 2D detection
+        point_2 = np.array(box.xywh.cpu())[0, :2]  # in pixels
+        point_2 = (
+            point_2 * RESIZE_FACTOR
+        )  # scaling down as the iamge is resized, but was not done when YOLO detection was run
+
+        # get the camera intrinsics
+        K = np.array(camera_intrinsics[0]).reshape(3, 3)
+
+        # distance away from the camera
+        d = (
+            pov_cam2.depth_image.astype(float)[int(point_2[1]), int(point_2[0])]
+            / 10000.0
+        )
+        import copy
+
+        # project the 2D detection to a point in 3D space
+        pixel_homog = np.array([point_2[0], point_2[1], 1.0])
+        K_inv = np.linalg.inv(K)
+        point_2_3D = (K_inv @ pixel_homog) * d
+        point_2_3D_camera_frame = copy.deepcopy(point_2_3D)
+
+        red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
+        red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
+        # red_sphere_t.translate(point_1, False)
+        material = o3d.visualization.rendering.MaterialRecord()
+        material.shader = "defaultUnlit"
+        material.base_color = [0, 1, 0, 0.5]
+        visualizer.add_object_in_camera_frame(
+            red_sphere_t,
+            (np.eye(3), point_2_3D_camera_frame),
+            "cam2",
+            material,
+            name=f"detection",
+        )
+
+    for box in results[2].boxes:
+        # point_2 is the 2D detection
+        point_2 = np.array(box.xywh.cpu())[0, :2]  # in pixels
+        point_2 = (
+            point_2 * RESIZE_FACTOR
+        )  # scaling down as the iamge is resized, but was not done when YOLO detection was run
+
+        # get the camera intrinsics
+        K = np.array(camera_intrinsics[0]).reshape(3, 3)
+
+        # distance away from the camera
+        d = (
+            pov_cam3.depth_image.astype(float)[int(point_2[1]), int(point_2[0])]
+            / 10000.0
+        )
+        import copy
+
+        # project the 2D detection to a point in 3D space
+        pixel_homog = np.array([point_2[0], point_2[1], 1.0])
+        K_inv = np.linalg.inv(K)
+        point_2_3D = (K_inv @ pixel_homog) * d
+        point_2_3D_camera_frame = copy.deepcopy(point_2_3D)
+
+        red_sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.025)
+        red_sphere_t = tgeometry.TriangleMesh.from_legacy(red_sphere)
+        # red_sphere_t.translate(point_1, False)
+        material = o3d.visualization.rendering.MaterialRecord()
+        material.shader = "defaultUnlit"
+        material.base_color = [0, 0, 1, 0.5]
+        visualizer.add_object_in_camera_frame(
+            red_sphere_t,
+            (np.eye(3), point_2_3D_camera_frame),
+            "cam3",
+            material,
+            name=f"detection",
+        )
 
     # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
     visualizer.run()
