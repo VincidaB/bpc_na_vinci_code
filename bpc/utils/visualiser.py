@@ -29,6 +29,14 @@ def camera_json_path(split: str, scene_id: int, camera: str) -> str:
     return f"{dataset_path}/{split}/{scene_id:06d}/scene_camera_{camera}.json"
 
 
+def camera_gt_json_path(split: str, scene_id: int, camera: str) -> str:
+    return f"{dataset_path}/{split}/{scene_id:06d}/scene_gt_{camera}.json"
+
+
+def camera_gt_info_json_path(split: str, scene_id: int, camera: str) -> str:
+    return f"{dataset_path}/{split}/{scene_id:06d}/scene_gt_info_{camera}.json"
+
+
 def get_camera_intrinsic(
     split: str, scene_id: int, image_id: int, camera: str
 ) -> list[float]:
@@ -44,6 +52,15 @@ def get_camera_extrinsics(
         data = json.load(f)
 
     return data[str(image_id)]["cam_R_w2c"], data[str(image_id)]["cam_t_w2c"]
+
+
+def get_camera_gt(
+    split: str, scene_id: int, image_id: int, camera: str
+) -> tuple[list[float], list[float]]:
+    with open(camera_gt_json_path(split, scene_id, camera)) as f:
+        data = json.load(f)
+
+    return data[str(image_id)]
 
 
 def camera_pose_from_extrinsics(
@@ -353,6 +370,10 @@ class PointCloudVisualizer:
         position = Rc @ t + Tc
         object.translate(position)
 
+        # rotate the object around it's center
+        rot_obj = Rc @ r
+        object.rotate(rot_obj, center=position)
+
         if self.scene.scene.has_geometry(name):
             name = name + "_1"
             while self.scene.scene.has_geometry(name):
@@ -500,6 +521,33 @@ if __name__ == "__main__":
                 material,
                 name=f"detection",
             )
+
+    # lets load the ground truth 3D poses and draw them in the scene
+    img_info = get_camera_gt(split, scene_id, img_id, "cam1")
+    print(img_info)
+    print("len(img_info) :")
+    print(len(img_info))
+
+    for obj_gt in img_info:
+        rot = np.array(obj_gt["cam_R_m2c"]).reshape(3, 3)
+        trans = np.array(obj_gt["cam_t_m2c"]) / 1000
+
+        obj_18 = o3d.io.read_triangle_mesh(
+            f"{dataset_path}/ipd_models/models/obj_000018.ply"
+        )
+        obj_18.scale(1 / 1000, center=[0, 0, 0])
+        material = o3d.visualization.rendering.MaterialRecord()
+
+        material.shader = "defaultUnlit"
+        material.base_color = colors[0]
+        visualizer.add_object_in_camera_frame(
+            obj_18,
+            (rot, trans),
+            "cam1",
+            material,
+            name=f"detection",
+        )
+        # first, lets not care about rotation
 
     # TODO : look at using threads to run actions while the visualizer is running, look at the ICP example
     visualizer.run()
