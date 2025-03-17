@@ -1,0 +1,3 @@
+[submodule "bpc/6D_pose_estimation/FoundationPose"]
+	path = bpc/6D_pose_estimation/FoundationPose
+	url = git@github.com:VincidaB/FoundationPose.git
