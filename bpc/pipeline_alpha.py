@@ -180,16 +180,9 @@ def main():
             f"img path : ", image_path(dataset, split, scene_id, "rgb_cam", "1", img_id)
         )
 
-    # img_path = "./000000_test_scaled_1920.png"
     img_path = image_path(dataset, split, scene_id, "rgb", "cam1", img_id)
 
-    # testing the detector
     results = twoD_detector(img_path)
-    # results[0].show()
-
-    # testing the segmentor
-    # everything_results = segmentor("./000000_val_scaled_1920.png", device="cuda", retina_masks=True, imgsz=1024, conf=0.4, iou=0.9)
-    # everything_results[0].show(boxes=False, color_mode='instance')
 
     overrides = dict(
         task="segment",
@@ -216,17 +209,15 @@ def main():
     for i, mask in enumerate(bbox_results[0].masks):
         mask_data = (
             mask.xy
-        )  # A list of numpy arrays, where each array contains the [x, y] pixel coordinates for a single segmentation mask. Each array has shape (N, 2), where N is the number of points in the segment.
+        )
         img_shape = mask.orig_shape
 
         # convert the mask_data to integer values
         mask_data = [mask.astype(int) for mask in mask_data]
 
-        # print(mask_data)
         # draw a white mask on a black image
         mask_img = np.zeros((img_shape), dtype=np.uint8)
         cv2.fillPoly(mask_img, mask_data, 255)
-        # scale to 720x405
         original_shape = mask_img.shape
         mask_img = cv2.resize(
             mask_img,
