@@ -65,6 +65,8 @@ dolp | ![](./assets/images/readme_dataset/val_000000_dolp_cam1_000003.jpg)  |  !
 
 ## Evaluation metrics 
 
+> mAP (mean Average Precision): mAP is calculated across a range of MSSD thresholds (2mm to 20mm, in 2mm increments) for recall. Detections with MSSD below a given threshold are considered successful. The final mAP score is the average across all thresholds. Therefore, higher recall, precision, and pose accuracy contribute to a better mAP score
+
 The challenge will be ranking the teams based on the mean average Precision (mAP) over a set of MSSD (Maximum Symetry-Aware Surface Distance) thresholds on the IPD dataset. MSSD is a metric defined in [[1]](#1) as being : 
 
 ```math
@@ -77,6 +79,24 @@ where:
 - $\bar{P}$ is the ground truth pose
 - $S_M$ is the set that contaains global symetry transformations of the object model $M$, cf "BOP challenge 2020 on 6D object localization" section 2.3
 - $V_M$ is the set of vertices of the object model $M$
+
+Then, scores are ranked based on the mAP over a set of MSSD thresholds, ranging from 2mm to 20mm, in 2mm increments:
+
+```math
+mAP = \frac{1}{10} \sum_{i=1}^{10} AP_i (th = 2i)
+```
+
+where:
+- $N$ is the number of MSSD thresholds
+- $AP_i$ is the average precision at the $i^{th}$ MSSD threshold 
+
+
+$AP(th)$ is calculated as follows:
+
+```math
+AP(th) = 
+```
+
 
 
 ## Team Members
