@@ -22,3 +22,14 @@ python -m pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipubl
 CMAKE_PREFIX_PATH=$CONDA_PREFIX/lib/python3.9/site-packages/pybind11/share/cmake/pybind11 bash build_all_conda.sh
 ```
 Make sure to run `build_all_conda.sh` and not `build_all.sh` as the latter will not work in a conda environment.
+
+
+To run with the demo data in the repo just run : 
+```bash
+python demo_ipd.py --debug 0 --est_refine_iter 3
+```
+Note :
+might need to run this :
+```bash 
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
+```
