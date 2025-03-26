@@ -3,6 +3,7 @@ import argparse
 import argcomplete
 
 from ultralytics import YOLO
+import time
 
 # from segmentation.FastSAM.fastsam import FastSAM, FastSAMPrompt
 from ultralytics import FastSAM
@@ -191,7 +192,7 @@ def main():
         save=False,
         imgsz=1024,
         conf=0.4,
-        iou=0.9,
+        iou=0.8,
     )
     predictor = FastSAMPredictor(overrides=overrides)
     everything_results = predictor(img_path)
@@ -207,9 +208,7 @@ def main():
 
     # save a mask image for each objects
     for i, mask in enumerate(bbox_results[0].masks):
-        mask_data = (
-            mask.xy
-        )
+        mask_data = mask.xy
         img_shape = mask.orig_shape
 
         # convert the mask_data to integer values
@@ -250,10 +249,9 @@ def main():
     # scale depth by a factor of 0.1
     depth = depth / 10000
 
-    mask = cv2.imread("mask_1.png", -1)
-    # 746.6 0.0 366.4101161956787
-    # 0.0 746.64 206.94334030151367
-    # 0.0 0.0 1.0
+    # TODO : remove this loading of the mask with the file
+    mask = cv2.imread("mask_4.png", -1)
+
     cam_k = np.array(
         [
             [746.6, 0.0, 366.4101161956787],
@@ -262,11 +260,16 @@ def main():
         ]
     )
 
+    start_time = time.time()
     pose = est.register(
         K=cam_k, rgb=color, depth=depth, ob_mask=mask, iteration=args.est_refine_iter
     )
+    logging.info(f"\033[33mregister time: {time.time() - start_time:.2f}\033[0m")
+
     estimated_position = pose[:3, 3]
+    estimated_rotation = pose[:3, :3]
     logging.info(f"Estimated position: {estimated_position}")
+    logging.info(f"Estimated rotation: {estimated_rotation}")
 
     os.makedirs(f"{debug_dir}/ob_in_cam", exist_ok=True)
     np.savetxt(f"{debug_dir}/ob_in_cam/000000.txt", pose.reshape(4, 4))
@@ -283,16 +286,14 @@ def main():
             transparency=0,
             is_input_rgb=True,
         )
+
+        cv2.imshow("3D Visualization", vis[..., ::-1])
+        cv2.imshow("Mask", mask)
+        cv2.waitKey(-1)
+
     if debug >= 2:
         os.makedirs(f"{debug_dir}/track_vis", exist_ok=True)
         imageio.imwrite(f"{debug_dir}/track_vis/000000.png", vis)
-
-    cv2.imshow("3D Visualization", vis[..., ::-1])
-    cv2.imshow("Mask", mask)
-    cv2.waitKey(-1)
-
-    # cv2.imshow('1', vis[...,::-1])
-    # cv2.waitKey(10)
 
 
 if __name__ == "__main__":
