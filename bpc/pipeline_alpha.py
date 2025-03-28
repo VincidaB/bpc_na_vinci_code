@@ -40,9 +40,6 @@ import sys
 
 # TODO: - parametrable FoundationPose parameters
 
-twoD_detector = None
-segmentor = None
-
 
 def resize(img, factor):
     return cv2.resize(
