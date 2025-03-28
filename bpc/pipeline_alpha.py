@@ -29,7 +29,7 @@ from ibpc_interfaces.srv import GetPoseEstimates
 from sensor_msgs.msg import CameraInfo, Image
 from geometry_msgs.msg import Pose
 import sys
-
+import json
 
 # This is the first version of the pipeline, using the following steps:
 # YOLO11 --> FastSAM --> FoundationPose
@@ -48,6 +48,25 @@ def resize(img, factor):
     )
 
 
+def scale_cam_k(cam_k: np.ndarray, factor: float) -> np.ndarray:
+    """
+    Scales the camera intrinsics matrix by a given factor.
+
+    Args:
+        cam_k (np.ndarray): The original camera intrinsics matrix.
+        factor (float): The scaling factor.
+
+    Returns:
+        np.ndarray: The scaled camera intrinsics matrix.
+    """
+    scaled_cam_k = cam_k.copy()
+    scaled_cam_k[0, 0] *= factor
+    scaled_cam_k[1, 1] *= factor
+    scaled_cam_k[0, 2] *= factor
+    scaled_cam_k[1, 2] *= factor
+    return scaled_cam_k
+
+
 def image_path(
     dataset_path: str,
     split: str,
@@ -61,6 +80,10 @@ def image_path(
     else:
         ext = "png"
     return f"{dataset_path}/{split}/{scene_id:06d}/{modality}_{camera}/{image_id:06d}.{ext}"
+
+
+def camera_json_path(dataset_path: str, split: str, scene_id: int, camera: str) -> str:
+    return f"{dataset_path}/{split}/{scene_id:06d}/scene_camera_{camera}.json"
 
 
 #         # Helper functions
@@ -180,7 +203,7 @@ class pipeline_alpha:
         pose_estimates = []
 
         for cam in [cam_1, cam_2, cam_3]:
-            cam_k = cam.intrinsics
+            cam_k = scale_cam_k(cam.intrinsics, self.resize_factor)
             color = cam.rgb
             depth = cam.depth  # Convert depth to float32
             # cv2.imshow("depth", depth)
@@ -285,21 +308,16 @@ if __name__ == "__main__":
     depth = depth.astype(np.float32)
     depth = depth / 10000
 
-    # TODO : get the actual K of the camera
-    # Mock data for CameraMsg
+    with open(camera_json_path(dataset, split, scene_id, "cam1"), "r") as f:
+        camera_data = json.load(f)
+    cam_k = np.array(camera_data[str(img_id)]["cam_K"]).reshape(3, 3)
+    print("Camera Intrinsics Matrix (cam_K):")
+    print(cam_k)
+
+    # Use the actual cam_k matrix for CameraMsg
     camera_info = CameraInfo()
     camera_info.header.frame_id = "camera_1"
-    camera_info.k = [
-        746.6,
-        0.0,
-        366.4101161956787,
-        0.0,
-        746.64,
-        206.94334030151367,
-        0.0,
-        0.0,
-        1.0,
-    ]
+    camera_info.k = cam_k.flatten().tolist()
 
     # TODO : get the actual pose of the camera (extrinsics)
     pose = Pose()
