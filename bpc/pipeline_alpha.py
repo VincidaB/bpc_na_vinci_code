@@ -195,17 +195,8 @@ class pipeline_alpha:
             boxes = results[0].cpu().boxes.numpy().xyxy
 
             # Segmentation
-            #! does this method call want a path?????
-            everything_results = self.segmentor_predictor(
-                image_path(
-                    "/media/vincent/more/bpc_teamname/./bpc/../datasets/ipd",
-                    "val",
-                    0,
-                    "rgb",
-                    "cam1",
-                    0,
-                )
-            )
+            everything_results = self.segmentor_predictor(color)
+
             bbox_results = self.segmentor_predictor.prompt(
                 everything_results, bboxes=boxes
             )
