@@ -29,7 +29,40 @@ To run with the demo data in the repo just run :
 python demo_ipd.py --debug 0 --est_refine_iter 3
 ```
 Note :
-might need to run this :
+might need to run this in every terminal session in the conda environment to set the library path for the conda environment:
 ```bash 
 export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 ```
+Or do the following to set it permanently:
+```bash
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+mkdir -p $CONDA_PREFIX/etc/conda/deactivate.d
+
+echo '#!/bin/sh
+export OLD_LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-}
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH' > $CONDA_PREFIX/etc/conda/activate.d/set_env.sh
+
+echo '#!/bin/sh
+export LD_LIBRARY_PATH=$OLD_LD_LIBRARY_PATH
+unset OLD_LD_LIBRARY_PATH' > $CONDA_PREFIX/etc/conda/deactivate.d/unset_env.sh
+
+chmod +x $CONDA_PREFIX/etc/conda/activate.d/set_env.sh
+chmod +x $CONDA_PREFIX/etc/conda/deactivate.d/unset_env.sh
+```
+
+Or if using fish shell :
+```bash
+mkdir -p $CONDA_PREFIX/etc/conda/activate.d
+echo '#!/usr/bin/fish
+set -gx OLD_LD_LIBRARY_PATH $LD_LIBRARY_PATH
+set -gx LD_LIBRARY_PATH $CONDA_PREFIX/lib $LD_LIBRARY_PATH' > $CONDA_PREFIX/etc/conda/activate.d/set_env.fish
+
+mkdir -p $CONDA_PREFIX/etc/conda/deactivate.d
+echo '#!/usr/bin/fish
+set -gx LD_LIBRARY_PATH $OLD_LD_LIBRARY_PATH
+set -e OLD_LD_LIBRARY_PATH' > $CONDA_PREFIX/etc/conda/deactivate.d/unset_env.fish
+
+chmod +x $CONDA_PREFIX/etc/conda/activate.d/set_env.fish
+chmod +x $CONDA_PREFIX/etc/conda/deactivate.d/unset_env.fish
+```
+
