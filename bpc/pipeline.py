@@ -1,68 +1,54 @@
-import roslibpy
-import time
-
+from fastapi import FastAPI
+import uvicorn
+from pydantic import BaseModel
+from typing import List
 import cv2
-import base64
-
 import numpy as np
-from cv_bridge import CvBridge
-bridge = CvBridge()
 
 # just a test to see if I can subscribe to a topic from a conda env
 
 # subribe to the topic /chatter for now
 
 
-def pipeline_service():
-    # Create a Roslibpy client
-    client = roslibpy.Ros(host='localhost', port=9090)
-    client.run()
-
-    # Create a service server for the /process_image service
-    service = roslibpy.Service(client, '/get_pose_estimates', 'ibpc_interfaces/srv/GetPoseEstimates')
-
-    # Define a callback function to handle service requests
-    def handle_request(request, response):
-        """
-        returns a response of the form `PoseEstimagte[]` in the response of name `pose_estimates`
-        """
-        print('Received request:', request)         
-
-        # Extract the object_ids, cameras, and photoneo from the request
-        object_ids = request['object_ids']
-        cameras = request['cameras']
-        photoneo = request['photoneo']
-
-        print(f'Object IDs: {object_ids}')
+app = FastAPI()
 
 
-        print('Processed image and sent response.')
-        
-        # ? that is how we set the response !!!!!
-        #response["pose_estimates"] = True 
-        return True
+#! pipeline = pipeline_alpha() 
 
-    # Advertise the service with the callback function
-    service.advertise(handle_request)
-
-    print('Service /get_pose_estimates is now available.')
-
-    # Keep the script running to handle service requests
-    try:
-        while True:
-            pass
-    except KeyboardInterrupt:
-        pass
-
-    # Unadvertise the service and close the client
-    service.unadvertise()
-    client.terminate()
+class PoseRequest(BaseModel):
+    object_ids: List[int]
+    cam_1: bytes  # send JPEG or PNG-encoded bytes
 
 
+@app.post("/estimate")
+def estimate_pose(req: PoseRequest):
+    print("Received request:", req)
+    # Decode image
+    import base64
+    # Decode base64 string to bytes
+    image_bytes = base64.b64decode(req.cam_1)
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # show the image for debug
+    if img is None:
+        raise ValueError("Failed to decode image. Ensure the input is valid.")
+    
+    if False:
+        cv2.imshow("image", img)
+        cv2.waitKey(0)
+    
+    # poses = pipeline.get_pose_estimates(
+    #     object_ids=req.object_ids,
+    #     cam_1=cam,
+    #     cam_2=cam,
+    #     cam_3=cam,
+    #     photoneo=None,
+    # )
 
+    poses = []  # TODO : Replace with actual pose estimation logic
+
+    return {"poses": poses}  # make sure poses is JSON serializable
 
 if __name__ == '__main__':
-    
-
-    # start the pipeline service
-    pipeline_service()
+    # start the pipeline
+    uvicorn.run(app, host="127.0.0.1", port=8000)
