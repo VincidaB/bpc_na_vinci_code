@@ -37,6 +37,7 @@ import json
 #         debug=0,
 # )
 
+
 # Helper functions
 def ros_pose_to_mat(pose: PoseMsg):
     r = Rotation.from_quat(
@@ -47,6 +48,9 @@ def ros_pose_to_mat(pose: PoseMsg):
     pose_matrix[:3, :3] = matrix
     pose_matrix[:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
     return pose_matrix
+
+
+bridge = CvBridge()
 
 
 class Camera:
@@ -114,48 +118,46 @@ class PoseEstimator(Node):
         self.srv = self.create_service(GetPoseEstimates, srv_name, self.srv_cb)
 
     def srv_cb(self, request, response):
-        # if len(request.object_ids) == 0:
-        #     self.get_logger().warn("Received request with empty object_ids.")
-        #     return response
-        # if len(request.cameras) < 3:
-        #     self.get_logger().warn("Received request with insufficient cameras.")
-        #     return response
-        # try:
-        #     cam_1 = Camera(request.cameras[0])
-        #     cam_2 = Camera(request.cameras[1])
-        #     cam_3 = Camera(request.cameras[2])
-        #     photoneo = Camera(request.photoneo)
-        #     response.pose_estimates = self.get_pose_estimates(
-        #         request.object_ids, cam_1, cam_2, cam_3, photoneo
-        #     )
-        # except:
-        #     self.get_logger().error("Error calling get_pose_estimates.")
-        # return response
-    
-        # test image at path'/media/vincent/more/bpc_teamname/mask_0.png'
-        
-        image = cv2.imread('/media/vincent/more/bpc_teamname/mask_0.png')
+
+        image = request.cameras[0].rgb
+        image = bridge.imgmsg_to_cv2(image, desired_encoding="passthrough")
+
+        depth = request.cameras[0].depth
+        depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
+
+        # image = cv2.imread('/media/vincent/more/bpc_teamname/mask_0.png')
+        # depth = cv2.imread('/media/vincent/more/bpc_teamname/000000_depth_cam1.png')
+
         if image is None:
             self.get_logger().error("Failed to load image. Exiting...")
             return response
-        
+
         import base64
-        image_bytes = cv2.imencode('.png', image)[1].tobytes()
-        image_base64 = base64.b64encode(image_bytes).decode('utf-8')
-        
+
+        image_bytes = cv2.imencode(".png", image)[1].tobytes()
+        image_base64 = base64.b64encode(image_bytes).decode("utf-8")
+
+        depth_bytes = cv2.imencode(".png", depth)[1].tobytes()
+        depth_base64 = base64.b64encode(depth_bytes).decode("utf-8")
+
         if not request.object_ids:
             self.get_logger().warn("Received request with empty object_ids.")
             return response
 
+        intrinsics = np.array(request.cameras[0].info.k).tolist()
+        self.get_logger().info("Camera intrinsics: " + str(intrinsics))
+
         payload = {
             "object_ids": [18],
             "cam_1": image_base64,
+            "cam_1_depth": depth_base64,
+            "cam_1_intrinsics": intrinsics,
         }
 
         res = requests.post("http://127.0.0.1:8000/estimate", json=payload)
 
         change_this = PoseEstimateMsg()
-        
+
         if res.ok:
             print("Pose server response: " + res.text)
             response.pose_estimates = [change_this]
@@ -164,7 +166,6 @@ class PoseEstimator(Node):
             response.pose_estimates = [change_this]
 
         return response
-
 
     def get_pose_estimates(
         self,

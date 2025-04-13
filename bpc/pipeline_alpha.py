@@ -11,9 +11,9 @@ from ultralytics.models.fastsam import FastSAMPredictor
 import cv2
 import numpy as np
 
-sys.path.append(
-    os.path.join(os.path.dirname(__file__), "sixD_pose_estimation", "FoundationPose")
-)
+# sys.path.append(
+#     os.path.join(os.path.dirname(__file__), "sixD_pose_estimation", "FoundationPose")
+# )
 
 from sixD_pose_estimation.FoundationPose.estimater import *
 from sixD_pose_estimation.FoundationPose.datareader import *
@@ -22,10 +22,10 @@ from cv_bridge import CvBridge
 from geometry_msgs.msg import Pose as PoseMsg
 from scipy.spatial.transform import Rotation
 
-from ibpc_interfaces.msg import Camera as CameraMsg
-from ibpc_interfaces.msg import Photoneo as PhotoneoMsg
-from ibpc_interfaces.msg import PoseEstimate as PoseEstimateMsg
-from ibpc_interfaces.srv import GetPoseEstimates
+# from ibpc_interfaces.msg import Camera as CameraMsg
+# from ibpc_interfaces.msg import Photoneo as PhotoneoMsg
+# from ibpc_interfaces.msg import PoseEstimate as PoseEstimateMsg
+# from ibpc_interfaces.srv import GetPoseEstimates
 from sensor_msgs.msg import CameraInfo, Image
 from geometry_msgs.msg import Pose
 import sys
@@ -88,6 +88,8 @@ def camera_json_path(dataset_path: str, split: str, scene_id: int, camera: str) 
 
 #         # Helper functions
 def ros_pose_to_mat(pose: PoseMsg):
+    print(f"Pose: {pose}")
+    return np.eye(4)
     r = Rotation.from_quat(
         [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
     )
@@ -117,33 +119,20 @@ class Camera:
                                      converted from the CameraMsg (None for PhotoneoMsg).
     """
 
-    def __init__(self, msg: Union[CameraMsg, PhotoneoMsg]):
-        """
-        Initializes a new Camera object from a ROS message.
+    def __init__(
+        self,
+        frame_id: str,
+        pose: PoseMsg,
+        intrinsics: np.ndarray,
+        rgb: Image,
+        depth: Image,
+    ):
 
-        Args:
-            msg: Either a CameraMsg or a PhotoneoMsg ROS message containing
-                 camera information.
-
-        Raises:
-           TypeError: If the input `msg` is not of the expected type.
-        """
-        br = CvBridge()
-
-        if not isinstance(msg, (CameraMsg, PhotoneoMsg)):
-            raise TypeError("Input message must be of type CameraMsg or PhotoneoMsg")
-
-        self.name: str = (msg.info.header.frame_id,)
-        self.pose: np.ndarray = ros_pose_to_mat(msg.pose)
-        self.intrinsics: np.ndarray = np.array(msg.info.k).reshape(3, 3)
-        self.rgb = br.imgmsg_to_cv2(msg.rgb)
-        self.depth = br.imgmsg_to_cv2(msg.depth)
-        if isinstance(msg, CameraMsg):
-            self.aolp: Optional[np.ndarray] = br.imgmsg_to_cv2(msg.aolp)
-            self.dolp: Optional[np.ndarray] = br.imgmsg_to_cv2(msg.dolp)
-        else:  # PhotoneoMsg
-            self.aolp: Optional[np.ndarray] = None
-            self.dolp: Optional[np.ndarray] = None
+        self.name: str = (frame_id,)
+        self.pose: np.ndarray = ros_pose_to_mat(pose)
+        self.intrinsics: np.ndarray = intrinsics
+        self.rgb = rgb
+        self.depth = depth
 
 
 class pipeline_alpha:
@@ -195,7 +184,7 @@ class pipeline_alpha:
         cam_2: Camera,
         cam_3: Camera,
         photoneo: np.array,
-    ) -> List[PoseEstimateMsg]:
+    ):
         """
         Computes the pose estimates for the objects in the scene,
         returns the object id, the score or confidence, and the pose
@@ -205,18 +194,23 @@ class pipeline_alpha:
         for cam in [cam_1, cam_2, cam_3]:
             cam_k = scale_cam_k(cam.intrinsics, self.resize_factor)
             color = cam.rgb
-            depth = cam.depth  # Convert depth to float32
-            # cv2.imshow("depth", depth)
+            depth = cam.depth
+            # cv2.imshow("rgb", color)
             # cv2.waitKey(0)
             # TODO : decide on what aprt of the pipiline gets the scaled down image
 
             # 2D detection
             results = self.detector(color)
             boxes = results[0].cpu().boxes.numpy().xyxy
+            # TODO : check if the boxes are empty, we need to return an empty pose list in that case
+            if len(boxes) == 0:
+                print("No boxes detected")
+                return []
 
             # Segmentation
             everything_results = self.segmentor_predictor(color)
-
+            print(f"Found {len(everything_results[0].masks)} masks in the image")
+            print(f"Found {len(results[0].boxes)} boxes in the image")
             bbox_results = self.segmentor_predictor.prompt(
                 everything_results, bboxes=boxes
             )
@@ -230,7 +224,7 @@ class pipeline_alpha:
 
             # TODO: we need to get the object id from the detection, currently we are using a 2D detector that only predicts obj_18, so we will use that for now
             # TODO: change this to load model from dataset path, maybe even the eval one
-            mesh_file = f"{code_dir}/sixD_pose_estimation/FoundationPose/demo_data/ipd_val_0/mesh/obj_000018.obj"
+            mesh_file = "/media/vincent/more/bpc_teamname/bpc/sixD_pose_estimation/FoundationPose/demo_data/ipd_val_0/mesh/obj_000018.obj"
             print(f"Loading mesh from {mesh_file}")
             mesh = trimesh.load(mesh_file)
             mesh.apply_transform(
@@ -254,7 +248,8 @@ class pipeline_alpha:
                 pose_msg.orientation.z = quat[2]
                 pose_msg.orientation.w = quat[3]
 
-                pose_estimate = PoseEstimateMsg(obj_id=18, score=0.8, pose=pose_msg)
+                # pose_estimate = PoseEstimateMsg(obj_id=18, score=0.8, pose=pose_msg)
+                pose_estimate = [18, 0.8, pose_msg]
                 pose_estimates.append(pose_estimate)
 
                 print(f"Estimated position: {estimated_position}")
@@ -337,16 +332,23 @@ if __name__ == "__main__":
     dolp_image = br.cv2_to_imgmsg(dolp, encoding="8UC1")
 
     # Create CameraMsg, but this should be called scene, or cameras_msg
-    camera_msg = CameraMsg(
-        info=camera_info,
-        pose=pose,
-        rgb=rgb_image,
-        depth=depth_image,
-        aolp=aolp_image,
-        dolp=dolp_image,
-    )
+    # camera_msg = CameraMsg(
+    #     info=camera_info,
+    #     pose=pose,
+    #     rgb=rgb_image,
+    #     depth=depth_image,
+    #     aolp=aolp_image,
+    #     dolp=dolp_image,
+    # )
+    # cam_1 = Camera(camera_msg)
 
-    cam_1 = Camera(camera_msg)
+    cam_1 = Camera(
+        frame_id="camera_1",
+        pose=pose,
+        intrinsics=cam_k,
+        rgb=color,
+        depth=depth,
+    )
 
     start_time_pose_estimation = time.time()
     poses = pipeline.get_pose_estimates(

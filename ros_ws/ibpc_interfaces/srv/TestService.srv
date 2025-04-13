@@ -1,0 +1,8 @@
+# Request
+
+sensor_msgs/Image rgb
+
+---
+
+# Response
+bool success
