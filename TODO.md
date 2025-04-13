@@ -11,4 +11,5 @@ TODO soon:
     - [ ] check the 2d detections
     - [ ] check the masks
     - [ ] check the 3D estimated poses
-    
+
+- [ ] change `requirements.txt` to reflect the new packages used in the conda env
