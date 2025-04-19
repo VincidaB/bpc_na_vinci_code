@@ -30,6 +30,7 @@ from sensor_msgs.msg import CameraInfo, Image
 from geometry_msgs.msg import Pose
 import sys
 import json
+import imageio
 
 # This is the first version of the pipeline, using the following steps:
 # YOLO11 --> FastSAM --> FoundationPose
@@ -39,6 +40,25 @@ import json
 # TODO: - compute the MSSD for each image
 
 # TODO: - parametrable FoundationPose parameters
+
+code_dir = os.path.dirname(__file__)
+
+
+def camera_pose_from_extrinsics(
+    R: list[float], t: list[float]
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Converts the camera extrinsics to a pose and rotation in the world frame
+    """
+    r_mat = np.array(R).reshape(3, 3)
+    r = Rotation.from_matrix(r_mat)
+    r_inv = r.inv()
+    # q = r_inv.as_quat()
+    trans = r_mat.T @ np.array(t)
+    # trans /= -1000.0  # convert to meters
+    trans = -trans
+    # return q, trans
+    return r_inv.as_matrix(), trans
 
 
 def resize(img, factor):
@@ -89,7 +109,7 @@ def camera_json_path(dataset_path: str, split: str, scene_id: int, camera: str) 
 #         # Helper functions
 def ros_pose_to_mat(pose: PoseMsg):
     print(f"Pose: {pose}")
-    return np.eye(4)
+    # return np.eye(4)
     r = Rotation.from_quat(
         [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
     )
@@ -127,9 +147,9 @@ class Camera:
         rgb: Image,
         depth: Image,
     ):
-
+        print(f"Camera Pose: {pose}")
         self.name: str = (frame_id,)
-        self.pose: np.ndarray = ros_pose_to_mat(pose)
+        self.pose: np.ndarray = pose
         self.intrinsics: np.ndarray = intrinsics
         self.rgb = rgb
         self.depth = depth
@@ -142,12 +162,14 @@ class pipeline_alpha:
         detector_path: str,
         segmentor_path: str,
         resize_factor: float = 0.185,
-        debug: int = 0,
+        debug: int = 3,
     ):
 
         self.resize_factor = resize_factor
         self.debug = debug
         self.debug_dir = f"{os.path.dirname(__file__)}/debug"
+        # os.system(f'rm -rf {self.debug_dir}/* && mkdir -p {self.debug_dir}/track_vis {self.debug_dir}/ob_in_cam')
+        print(f"debug dir: {self.debug_dir}")
 
         self.detector = YOLO(detector_path)
         print(f"Initializing segmentor with the model located at: {segmentor_path}")
@@ -190,14 +212,20 @@ class pipeline_alpha:
         returns the object id, the score or confidence, and the pose
         """
         pose_estimates = []
-
-        for cam in [cam_1, cam_2, cam_3]:
+        cameras_to_use = [
+            cam_1,
+            # cam_2,
+            # cam_3
+        ]
+        for cam in cameras_to_use:
             cam_k = scale_cam_k(cam.intrinsics, self.resize_factor)
+            print(f"Camera intrinsics matrix (cam_K): {cam_k}")
+            camera_pose = cam.pose
+
             color = cam.rgb
             depth = cam.depth
-            # cv2.imshow("rgb", color)
-            # cv2.waitKey(0)
-            # TODO : decide on what aprt of the pipiline gets the scaled down image
+
+            # TODO : decide on what part of the pipeline gets the scaled down image
 
             # 2D detection
             results = self.detector(color)
@@ -205,7 +233,7 @@ class pipeline_alpha:
             # TODO : check if the boxes are empty, we need to return an empty pose list in that case
             if len(boxes) == 0:
                 print("No boxes detected")
-                return []
+                continue
 
             # Segmentation
             everything_results = self.segmentor_predictor(color)
@@ -218,42 +246,140 @@ class pipeline_alpha:
             # save a mask image for each objects
             masks = self.generate_masks(bbox_results)
             color = resize(color, self.resize_factor)
-            depth = resize(depth, self.resize_factor).astype(
-                np.float32
-            )  # Ensure depth remains float32 after resizing
+            depth = resize(depth, self.resize_factor)
+
+            # max value in depth :
+
+            # Convert depth to float32 and scale down properly
+            depth = depth.astype(np.float32)
+
+            depth /= 10000
+
+            # show depth using matplotlib
+            # plt.imshow(depth)
+            # plt.colorbar()
+            # plt.show()
 
             # TODO: we need to get the object id from the detection, currently we are using a 2D detector that only predicts obj_18, so we will use that for now
             # TODO: change this to load model from dataset path, maybe even the eval one
-            mesh_file = "/media/vincent/more/bpc_teamname/bpc/sixD_pose_estimation/FoundationPose/demo_data/ipd_val_0/mesh/obj_000018.obj"
-            print(f"Loading mesh from {mesh_file}")
-            mesh = trimesh.load(mesh_file)
-            mesh.apply_transform(
-                np.diag([0.001, 0.001, 0.001, 1])
-            )  #! annnoying to remember, this should be baked in one of the method calls
-            self.est.set_model(mesh.vertices, mesh.vertex_normals, mesh=mesh)
-            for mask in masks:
-                pose = self.est.register(
-                    K=cam_k, rgb=color, depth=depth, ob_mask=mask, iteration=3
-                )
-                estimated_position = pose[:3, 3]
-                estimated_rotation = pose[:3, :3]
-                pose_msg = Pose()
-                pose_msg.position.x = float(estimated_position[0])
-                pose_msg.position.y = float(estimated_position[1])
-                pose_msg.position.z = float(estimated_position[2])
-                r = Rotation.from_matrix(estimated_rotation)
-                quat = r.as_quat()
-                pose_msg.orientation.x = quat[0]
-                pose_msg.orientation.y = quat[1]
-                pose_msg.orientation.z = quat[2]
-                pose_msg.orientation.w = quat[3]
+            for i, object_id in enumerate(object_ids):
+                if object_id != 18:
+                    print(
+                        f"currently, only object 18 is supported, skipping {object_id}"
+                    )
+                    continue
 
-                # pose_estimate = PoseEstimateMsg(obj_id=18, score=0.8, pose=pose_msg)
-                pose_estimate = [18, 0.8, pose_msg]
-                pose_estimates.append(pose_estimate)
+                mesh_file = f"{code_dir}/../meshes/models/obj_{object_id:06d}.ply"
+                # mesh_file = "/media/vincent/more/bpc_teamname/bpc/sixD_pose_estimation/FoundationPose/demo_data/ipd_val_0/mesh/obj_000018.obj"
+                print(f"Loading mesh from {mesh_file}")
+                mesh = trimesh.load(mesh_file)
+                mesh.apply_transform(
+                    np.diag([0.001, 0.001, 0.001, 1])
+                )  #! annnoying to remember, this should be baked in one of the method calls
+                self.est.set_model(mesh.vertices, mesh.vertex_normals, mesh=mesh)
 
-                print(f"Estimated position: {estimated_position}")
-                print(f"Estimated rotation: {estimated_rotation}")
+                # for debug modes
+                to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
+                bbox = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
+
+                for j, mask in enumerate(masks):
+
+                    # save color, depth and mask images in the debug directory
+                    os.makedirs(f"{self.debug_dir}/mask", exist_ok=True)
+                    os.makedirs(f"{self.debug_dir}/color", exist_ok=True)
+                    os.makedirs(f"{self.debug_dir}/depth", exist_ok=True)
+
+                    imageio.imwrite(
+                        f"{self.debug_dir}/mask/{i}-{j}.png", mask.astype(np.uint8)
+                    )
+                    imageio.imwrite(
+                        f"{self.debug_dir}/color/{i}-{j}.png", color.astype(np.uint8)
+                    )
+                    imageio.imwrite(
+                        f"{self.debug_dir}/depth/{i}-{j}.png",
+                        (depth * 10000).astype(np.uint16),
+                    )
+
+                    pose = self.est.register(
+                        K=cam_k, rgb=color, depth=depth, ob_mask=mask, iteration=3
+                    )
+                    estimated_position = pose[:3, 3]
+                    estimated_rotation = pose[:3, :3]
+                    # pose_msg = Pose()
+
+                    os.makedirs(f"{self.debug_dir}/ob_in_cam", exist_ok=True)
+                    np.savetxt(
+                        f"{self.debug_dir}/ob_in_cam/{i}-{j}.txt", pose.reshape(4, 4)
+                    )
+
+                    print(f"self.debug: {self.debug}")
+                    if self.debug >= 3:
+                        print("self.debug>=3")
+                        m = mesh.copy()
+                        m.apply_transform(pose)
+                        m.export(f"{self.debug_dir}/model_tf.obj")
+                        xyz_map = depth2xyzmap(depth, cam_k)
+                        valid = depth >= 0.001
+                        pcd = toOpen3dCloud(xyz_map[valid], color[valid])
+                        o3d.io.write_point_cloud(
+                            f"{self.debug_dir}/scene_complete.ply", pcd
+                        )
+
+                    if self.debug >= 1:
+                        center_pose = pose @ np.linalg.inv(to_origin)
+                        vis = draw_posed_3d_box(
+                            cam_k, img=color, ob_in_cam=center_pose, bbox=bbox
+                        )
+                        vis = draw_xyz_axis(
+                            color,
+                            ob_in_cam=center_pose,
+                            scale=0.1,
+                            K=cam_k,
+                            thickness=3,
+                            transparency=0,
+                            is_input_rgb=True,
+                        )
+                        cv2.imshow("1", vis[..., ::-1])
+                        cv2.waitKey(10)
+
+                    if self.debug >= 2:
+                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                        imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
+
+                    #! change the confidence (maybe use the score from the detection)
+
+                    print(f"Estimated position: {estimated_position}")
+                    print(f"Estimated rotation: {estimated_rotation}")
+
+                    # change the frame of the pose from the camera frame to the world frame
+
+                    Rc, Tc = camera_pose_from_extrinsics(
+                        camera_pose[:3, :3], camera_pose[:3, 3] / 1000
+                    )
+
+                    # Rc, Tc = camera_pose[:3, :3], camera_pose[:3, 3] /1000
+                    # print(f"Rc: {Rc}")
+                    # print(f"Tc: {Tc}")
+                    world_position = Rc @ estimated_position + Tc
+                    world_rotation = Rc @ estimated_rotation
+                    # print(f"Estimated world position: {world_position}")
+                    # print(f"Estimated world rotation: {world_rotation}")
+
+                    r = Rotation.from_matrix(world_rotation)
+                    quat = r.as_quat().tolist()
+                    world_position = world_position.tolist()
+
+                    pose_not_msg = (
+                        world_position + quat
+                    )  # concatenate the position and rotation
+
+                    print(f"Pose but not a msg: {pose_not_msg}")
+                    pose_estimate = {
+                        "object_id": object_id,
+                        "conf": 0.8,
+                        "pose": pose_not_msg,
+                    }
+                    pose_estimates.append(pose_estimate)
 
         return pose_estimates
 
@@ -283,12 +409,11 @@ if __name__ == "__main__":
         detector_path="./bpc/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
         segmentor_path="./bpc/segmentation/FastSAM/weights/FastSAM-x.pt",
         resize_factor=0.185,
-        debug=0,
+        debug=3,
     )
 
     # let's Create 3 cameras and photeneo = None
     # we will use the same image for all cameras for now
-    code_dir = os.path.dirname(__file__)
     dataset = f"{code_dir}/../datasets/ipd"
     split = "val"
     scene_id = 0
@@ -330,17 +455,6 @@ if __name__ == "__main__":
     depth_image = br.cv2_to_imgmsg(depth, encoding="32FC1")
     aolp_image = br.cv2_to_imgmsg(aolp, encoding="8UC1")
     dolp_image = br.cv2_to_imgmsg(dolp, encoding="8UC1")
-
-    # Create CameraMsg, but this should be called scene, or cameras_msg
-    # camera_msg = CameraMsg(
-    #     info=camera_info,
-    #     pose=pose,
-    #     rgb=rgb_image,
-    #     depth=depth_image,
-    #     aolp=aolp_image,
-    #     dolp=dolp_image,
-    # )
-    # cam_1 = Camera(camera_msg)
 
     cam_1 = Camera(
         frame_id="camera_1",

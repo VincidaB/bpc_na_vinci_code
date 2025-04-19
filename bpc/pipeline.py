@@ -33,45 +33,68 @@ code_dir = os.path.dirname(__file__)
 app = FastAPI()
 
 
+class DepthPayload(BaseModel):
+    data: List[int]  # Flattened depth array
+    width: int  # Width of the depth image
+    height: int
+
+
 class PoseRequest(BaseModel):
     object_ids: List[int]
     cam_1: bytes  # send JPEG or PNG-encoded bytes
-    cam_1_depth: bytes  # send JPEG or PNG-encoded bytes
+    cam_1_depth: DepthPayload  # Use the new depth payload structure
     cam_1_intrinsics: List[float]
-
-
-# def image_decoder(image_bytes: bytes) -> np.ndarray:
-#     # Decode base64 string to bytes
-#     nparr = np.frombuffer(image_bytes, np.uint8)
-#     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-#     return img
+    cam_1_extrinsics: List[float]
 
 
 @app.post("/estimate")
 def estimate_pose(req: PoseRequest):
-    # print("Received request:", req)
-    # Decode image
     import base64
 
-    # Decode base64 string to bytes
+    # Decode RGB image
     image_bytes = base64.b64decode(req.cam_1)
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    # show the image for debug
     if img is None:
-        raise ValueError("Failed to decode image. Ensure the input is valid.")
+        raise ValueError("Failed to decode RGB image. Ensure the input is valid.")
 
-    depth_bytes = base64.b64decode(req.cam_1_depth)
-    nparr_depth = np.frombuffer(depth_bytes, np.uint8)
-    depth = cv2.imdecode(nparr_depth, cv2.IMREAD_UNCHANGED)
+    # Decode depth image
+    depth_data = np.array(req.cam_1_depth.data, dtype=np.uint16)
+    depth = depth_data.reshape((req.cam_1_depth.height, req.cam_1_depth.width))
+    # Check if depth image is valid
+    print("max depth value:", np.max(depth))
+    print("min depth value:", np.min(depth))
 
-    if False:
-        cv2.imshow("image", img)
-        cv2.waitKey(0)
+    if depth is None:
+        raise ValueError("Failed to decode depth image. Ensure the input is valid.")
+
+    # Debugging: Display the images
+    # cv2.imshow("RGB Image", img)
+    # cv2.imshow("Depth Image", depth)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
 
     cam_1 = Camera(
         frame_id="cam_1",
-        pose=np.eye(4),
+        pose=np.array(req.cam_1_extrinsics).reshape((4, 4)),
+        intrinsics=np.array(req.cam_1_intrinsics).reshape((3, 3)),
+        rgb=img,
+        depth=depth,
+    )
+
+    poses = pipeline.get_pose_estimates(
+        object_ids=req.object_ids,
+        cam_1=cam_1,
+        cam_2=cam_1,
+        cam_3=cam_1,
+        photoneo=None,
+    )
+
+    return {"poses": poses}  # Ensure poses is JSON serializable
+
+    cam_1 = Camera(
+        frame_id="cam_1",
+        pose=np.array(req.cam_1_extrinsics).reshape((4, 4)),
         intrinsics=np.array(req.cam_1_intrinsics).reshape((3, 3)),
         rgb=img,
         depth=depth,

@@ -123,10 +123,26 @@ class PoseEstimator(Node):
         image = bridge.imgmsg_to_cv2(image, desired_encoding="passthrough")
 
         depth = request.cameras[0].depth
-        depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
+        print("encoding: ", depth.encoding)  # --> 32FC1
 
-        # image = cv2.imread('/media/vincent/more/bpc_teamname/mask_0.png')
+        # works but I dont want the scaling, I want to keep the depth values
+        # depth = bridge.imgmsg_to_cv2(depth, desired_encoding="passthrough")
+        # depth = (depth * 255 / np.max(depth)).astype(np.uint8)  # Normalize and convert to 8-bit
+
+        depth = bridge.imgmsg_to_cv2(depth, desired_encoding="32FC1")
+
+        depth_array = np.array(depth, dtype=np.int32)
+        print("depth array: ", depth_array)
+        print("max depth: ", np.max(depth))
+        print("min depth: ", np.min(depth))
+
+        # Save the depth image to a file for debugging purposes
+        # cv2.imwrite("/tmp/depth_debug.png", depth)
+        # self.get_logger().info("Depth image saved to /tmp/depth_debug.png")
+
         # depth = cv2.imread('/media/vincent/more/bpc_teamname/000000_depth_cam1.png')
+
+        # send the iamge as an array
 
         if image is None:
             self.get_logger().error("Failed to load image. Exiting...")
@@ -137,33 +153,61 @@ class PoseEstimator(Node):
         image_bytes = cv2.imencode(".png", image)[1].tobytes()
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
-        depth_bytes = cv2.imencode(".png", depth)[1].tobytes()
-        depth_base64 = base64.b64encode(depth_bytes).decode("utf-8")
+        # depth_bytes = cv2.imencode(".png", depth)[1].tobytes()
+        # depth_base64 = base64.b64encode(depth_bytes).decode("utf-8")
+
+        depth_payload = {
+            "data": depth_array.flatten().tolist(),
+            "width": depth_array.shape[1],
+            "height": depth_array.shape[0],
+        }
 
         if not request.object_ids:
             self.get_logger().warn("Received request with empty object_ids.")
             return response
 
         intrinsics = np.array(request.cameras[0].info.k).tolist()
+        camera_pose = ros_pose_to_mat(request.cameras[0].pose).flatten().tolist()
+
         self.get_logger().info("Camera intrinsics: " + str(intrinsics))
+        self.get_logger().info("Camera extrinsics: " + str(camera_pose))
 
         payload = {
             "object_ids": [18],
             "cam_1": image_base64,
-            "cam_1_depth": depth_base64,
+            "cam_1_depth": depth_payload,
             "cam_1_intrinsics": intrinsics,
+            "cam_1_extrinsics": camera_pose,
         }
 
         res = requests.post("http://127.0.0.1:8000/estimate", json=payload)
+        print("Response status code: ", res.status_code)
+        print("Response content: ", res.content)
 
-        change_this = PoseEstimateMsg()
+        response_data = json.loads(res.content.decode("utf-8"))
+
+        pose_estimate_msg_list = []
+        for pose in response_data["poses"]:
+            pose_estimate_msg = PoseEstimateMsg()
+            pose_estimate_msg.obj_id = pose["object_id"]
+            pose_estimate_msg.pose.position.x = pose["pose"][0]
+            pose_estimate_msg.pose.position.y = pose["pose"][1]
+            pose_estimate_msg.pose.position.z = pose["pose"][2]
+            pose_estimate_msg.pose.orientation.x = pose["pose"][3]
+            pose_estimate_msg.pose.orientation.y = pose["pose"][4]
+            pose_estimate_msg.pose.orientation.z = pose["pose"][5]
+            pose_estimate_msg.pose.orientation.w = pose["pose"][6]
+            pose_estimate_msg.score = pose["conf"]
+
+            # Add the new message to the list
+            pose_estimate_msg_list.append(pose_estimate_msg)
 
         if res.ok:
             print("Pose server response: " + res.text)
-            response.pose_estimates = [change_this]
+            response.pose_estimates = pose_estimate_msg_list
         else:
             self.get_logger().error("Pose server error: " + res.text)
-            response.pose_estimates = [change_this]
+            response.pose_estimates = pose_estimate_msg_list
 
         return response
 
