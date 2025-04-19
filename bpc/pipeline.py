@@ -18,16 +18,15 @@ from pipeline_alpha import Camera
 # from ibpc_interfaces.msg import Photoneo as PhotoneoMsg
 # from ibpc_interfaces.msg import PoseEstimate as PoseEstimateMsg
 
-root_path = "/media/vincent/more/bpc_teamname/bpc"
+code_dir = os.path.dirname(__file__)
 
 pipeline = pipeline_alpha(
-    detector_path=f"{root_path}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
-    segmentor_path=f"{root_path}/segmentation/FastSAM/weights/FastSAM-x.pt",
+    detector_path=f"{code_dir}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+    segmentor_path=f"{code_dir}/segmentation/FastSAM/weights/FastSAM-x.pt",
     resize_factor=0.185,
     debug=0,
 )
 
-code_dir = os.path.dirname(__file__)
 
 
 app = FastAPI()

@@ -1,6 +1,5 @@
 import os, sys
 import argparse
-import argcomplete
 
 from ultralytics import YOLO
 import time
@@ -18,16 +17,16 @@ import numpy as np
 from sixD_pose_estimation.FoundationPose.estimater import *
 from sixD_pose_estimation.FoundationPose.datareader import *
 
-from cv_bridge import CvBridge
-from geometry_msgs.msg import Pose as PoseMsg
+# from cv_bridge import CvBridge
+# from geometry_msgs.msg import Pose as PoseMsg
 from scipy.spatial.transform import Rotation
 
 # from ibpc_interfaces.msg import Camera as CameraMsg
 # from ibpc_interfaces.msg import Photoneo as PhotoneoMsg
 # from ibpc_interfaces.msg import PoseEstimate as PoseEstimateMsg
 # from ibpc_interfaces.srv import GetPoseEstimates
-from sensor_msgs.msg import CameraInfo, Image
-from geometry_msgs.msg import Pose
+# from sensor_msgs.msg import CameraInfo, Image
+# from geometry_msgs.msg import Pose
 import sys
 import json
 import imageio
@@ -107,17 +106,17 @@ def camera_json_path(dataset_path: str, split: str, scene_id: int, camera: str) 
 
 
 #         # Helper functions
-def ros_pose_to_mat(pose: PoseMsg):
-    print(f"Pose: {pose}")
-    # return np.eye(4)
-    r = Rotation.from_quat(
-        [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
-    )
-    matrix = r.as_matrix()
-    pose_matrix = np.eye(4)
-    pose_matrix[:3, :3] = matrix
-    pose_matrix[:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
-    return pose_matrix
+# def ros_pose_to_mat(pose: PoseMsg):
+#     print(f"Pose: {pose}")
+#     # return np.eye(4)
+#     r = Rotation.from_quat(
+#         [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
+#     )
+#     matrix = r.as_matrix()
+#     pose_matrix = np.eye(4)
+#     pose_matrix[:3, :3] = matrix
+#     pose_matrix[:3, 3] = [pose.position.x, pose.position.y, pose.position.z]
+#     return pose_matrix
 
 
 class Camera:
@@ -142,10 +141,10 @@ class Camera:
     def __init__(
         self,
         frame_id: str,
-        pose: PoseMsg,
+        pose: np.ndarray,
         intrinsics: np.ndarray,
-        rgb: Image,
-        depth: Image,
+        rgb,
+        depth,
     ):
         print(f"Camera Pose: {pose}")
         self.name: str = (frame_id,)
@@ -403,77 +402,78 @@ class pipeline_alpha:
 
 
 if __name__ == "__main__":
+    pass
 
-    # testing the pipeline_alpha class
-    pipeline = pipeline_alpha(
-        detector_path="./bpc/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
-        segmentor_path="./bpc/segmentation/FastSAM/weights/FastSAM-x.pt",
-        resize_factor=0.185,
-        debug=3,
-    )
+    # # testing the pipeline_alpha class
+    # pipeline = pipeline_alpha(
+    #     detector_path="./bpc/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+    #     segmentor_path="./bpc/segmentation/FastSAM/weights/FastSAM-x.pt",
+    #     resize_factor=0.185,
+    #     debug=3,
+    # )
 
-    # let's Create 3 cameras and photeneo = None
-    # we will use the same image for all cameras for now
-    dataset = f"{code_dir}/../datasets/ipd"
-    split = "val"
-    scene_id = 0
-    img_id = 0
-    color = cv2.imread(image_path(dataset, split, scene_id, "rgb", "cam1", img_id))
-    depth = cv2.imread(
-        image_path(dataset, split, scene_id, "depth", "cam1", img_id),
-        cv2.IMREAD_UNCHANGED,
-    )
-    aolp = cv2.imread(image_path(dataset, split, scene_id, "aolp", "cam1", img_id), -1)
-    dolp = cv2.imread(image_path(dataset, split, scene_id, "dolp", "cam1", img_id), -1)
-    depth = depth.astype(np.float32)
-    depth = depth / 10000
+    # # let's Create 3 cameras and photeneo = None
+    # # we will use the same image for all cameras for now
+    # dataset = f"{code_dir}/../datasets/ipd"
+    # split = "val"
+    # scene_id = 0
+    # img_id = 0
+    # color = cv2.imread(image_path(dataset, split, scene_id, "rgb", "cam1", img_id))
+    # depth = cv2.imread(
+    #     image_path(dataset, split, scene_id, "depth", "cam1", img_id),
+    #     cv2.IMREAD_UNCHANGED,
+    # )
+    # aolp = cv2.imread(image_path(dataset, split, scene_id, "aolp", "cam1", img_id), -1)
+    # dolp = cv2.imread(image_path(dataset, split, scene_id, "dolp", "cam1", img_id), -1)
+    # depth = depth.astype(np.float32)
+    # depth = depth / 10000
 
-    with open(camera_json_path(dataset, split, scene_id, "cam1"), "r") as f:
-        camera_data = json.load(f)
-    cam_k = np.array(camera_data[str(img_id)]["cam_K"]).reshape(3, 3)
-    print("Camera Intrinsics Matrix (cam_K):")
-    print(cam_k)
+    # with open(camera_json_path(dataset, split, scene_id, "cam1"), "r") as f:
+    #     camera_data = json.load(f)
+    # cam_k = np.array(camera_data[str(img_id)]["cam_K"]).reshape(3, 3)
+    # print("Camera Intrinsics Matrix (cam_K):")
+    # print(cam_k)
 
-    # Use the actual cam_k matrix for CameraMsg
-    camera_info = CameraInfo()
-    camera_info.header.frame_id = "camera_1"
-    camera_info.k = cam_k.flatten().tolist()
+    # # Use the actual cam_k matrix for CameraMsg
+    # # camera_info = CameraInfo()
+    # # camera_info.header.frame_id = "camera_1"
+    # # camera_info.k = cam_k.flatten().tolist()
 
-    # TODO : get the actual pose of the camera (extrinsics)
-    pose = Pose()
-    pose.position.x = 0.0
-    pose.position.y = 0.0
-    pose.position.z = 0.0
-    pose.orientation.x = 0.0
-    pose.orientation.y = 0.0
-    pose.orientation.z = 0.0
-    pose.orientation.w = 1.0
+    # # TODO : get the actual pose of the camera (extrinsics)
+    # # pose = Pose()
+    # # pose.position.x = 0.0
+    # # pose.position.y = 0.0
+    # # pose.position.z = 0.0
+    # # pose.orientation.x = 0.0
+    # # pose.orientation.y = 0.0
+    # # pose.orientation.z = 0.0
+    # # pose.orientation.w = 1.0
 
-    br = CvBridge()
+    # #br = CvBridge()
 
-    rgb_image = br.cv2_to_imgmsg(color, encoding="8UC3")
-    depth_image = br.cv2_to_imgmsg(depth, encoding="32FC1")
-    aolp_image = br.cv2_to_imgmsg(aolp, encoding="8UC1")
-    dolp_image = br.cv2_to_imgmsg(dolp, encoding="8UC1")
+    # #rgb_image = br.cv2_to_imgmsg(color, encoding="8UC3")
+    # #depth_image = br.cv2_to_imgmsg(depth, encoding="32FC1")
+    # #aolp_image = br.cv2_to_imgmsg(aolp, encoding="8UC1")
+    # #dolp_image = br.cv2_to_imgmsg(dolp, encoding="8UC1")
 
-    cam_1 = Camera(
-        frame_id="camera_1",
-        pose=pose,
-        intrinsics=cam_k,
-        rgb=color,
-        depth=depth,
-    )
+    # cam_1 = Camera(
+    #     frame_id="camera_1",
+    #     pose=pose,
+    #     intrinsics=cam_k,
+    #     rgb=color,
+    #     depth=depth,
+    # )
 
-    start_time_pose_estimation = time.time()
-    poses = pipeline.get_pose_estimates(
-        object_ids=[18],
-        cam_1=cam_1,
-        cam_2=cam_1,
-        cam_3=cam_1,
-        photoneo=None,
-    )
-    logging.info(
-        f"\033[32mPose estimation time: {time.time() - start_time_pose_estimation:.2f} seconds\033[0m"
-    )
+    # start_time_pose_estimation = time.time()
+    # poses = pipeline.get_pose_estimates(
+    #     object_ids=[18],
+    #     cam_1=cam_1,
+    #     cam_2=cam_1,
+    #     cam_3=cam_1,
+    #     photoneo=None,
+    # )
+    # logging.info(
+    #     f"\033[32mPose estimation time: {time.time() - start_time_pose_estimation:.2f} seconds\033[0m"
+    # )
 
-    print(poses)
+    # print(poses)

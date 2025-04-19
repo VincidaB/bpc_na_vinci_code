@@ -1,0 +1,200 @@
+FROM ros:jazzy-perception AS base
+
+SHELL [ "/bin/bash" , "-c" ]
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Prerequisites
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget software-properties-common gnupg2 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt/ros/underlay
+
+# TODO(tfoote) Add documentation of why these are required
+ENV ROS_HOME=/tmp
+ENV RMW_IMPLEMENTATION=rmw_zenoh_cpp
+
+# underlay stage: base + dependencies built
+FROM base AS underlay
+
+#ARG MODEL_DIR=models
+
+#ADD ibpc_interfaces /opt/ros/underlay/src/ibpc_interfaces
+ADD bpc/ibpc_interfaces /opt/ros/underlay/src/ibpc_interfaces
+
+RUN . /opt/ros/jazzy/setup.sh \
+&& apt-get update \
+&& rosdep update \
+&& rosdep install --from-paths src --ignore-src --rosdistro jazzy -yr \
+&& colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release \
+--event-handlers=console_direct+ \
+--merge-install
+
+
+#ADD ${MODEL_DIR} /opt/ros/underlay/install/models
+
+FROM underlay AS overlay
+
+ARG SERVICE_PACKAGE=bpc/ibpc_pose_estimator_py
+ARG SERVICE_EXECUTABLE_NAME=ibpc_pose_estimator
+
+RUN apt-get update \
+    &&  apt install -y ros-jazzy-rmw-zenoh-cpp \
+    && rm -rf /var/lib/apt/lists/*
+
+ADD ${SERVICE_PACKAGE} /opt/ros/overlay/src/${SERVICE_PACKAGE}
+
+RUN . /opt/ros/jazzy/setup.sh \
+    && . /opt/ros/underlay/install/setup.sh \
+    && cd /opt/ros/overlay \
+    && rosdep install --from-paths src --ignore-src --rosdistro jazzy -yr \
+    && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release \
+    --event-handlers=console_direct+ \
+    --merge-install
+
+
+FROM base
+
+
+# install CONDA
+RUN mkdir -p /opt/conda 
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O /opt/conda/miniconda.sh \
+    && bash /opt/conda/miniconda.sh -b -p /opt/miniconda \
+    && rm /opt/conda/miniconda.sh
+
+ADD ./bpc_navinci_code.yml /home/bpc_na_vinci_code/bpc_navinci_code.yml
+
+# set CMAKE_PREFIX_PATH for dependencies
+RUN . /opt/miniconda/bin/activate && export CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3"
+
+# install CONDA env
+RUN . /opt/miniconda/bin/activate && conda create --name foundationpose python=3.9
+# install additional packages in the foundationpose conda environment
+RUN . /opt/miniconda/bin/activate && conda install -n foundationpose -c "nvidia/label/cuda-11.8.0" cuda-toolkit -y \
+    && conda install -n foundationpose -c conda-forge gcc=11 gxx=11 -y \
+    && conda install -n foundationpose -c conda-forge boost-cpp -y \
+    && conda install conda-forge::eigen=3.4.0
+
+# add just the requirements.txt file in /temp/requirements.txt
+ADD ./bpc/sixD_pose_estimation/FoundationPose/requirements.txt /temp/requirements.txt
+
+# install the requirements from the requirements.txt file in ./bpc/sixD_pose_estimate/FoundationPose
+RUN . /opt/miniconda/bin/activate foundationpose \
+    && python -m pip install -r /temp/requirements.txt
+
+RUN . /opt/miniconda/bin/activate foundationpose \
+    #&& python -m pip install -r /home/bpc_na_vinci_code/requirements.txt \
+    && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git \
+    && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu118_pyt200/download.html
+
+
+# add every directory in . except for `datasets`
+#! need to add a .dockerignore file to ignore the datasets folder
+ADD ./bpc /home/bpc_na_vinci_code/bpc
+ADD ./ros_ws /home/bpc_na_vinci_code/ros_ws
+ADD ./meshes /home/bpc_na_vinci_code/meshes
+
+
+RUN rm -rf /home/bpc_na_vinci_code/datasets
+WORKDIR /home/bpc_na_vinci_code/
+
+
+
+# run build script
+RUN . /opt/miniconda/bin/activate foundationpose && CMAKE_PREFIX_PATH=$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3:$CONDA_PREFIX/lib/python3.9/site-packages/pybind11/share/cmake/pybind11 bash /home/bpc_na_vinci_code/bpc/sixD_pose_estimation/FoundationPose/build_all_conda.sh
+
+
+
+# # result stage: base + copied install folders from the overlay + service setup.
+
+# 
+ARG SERVICE_PACKAGE=ibpc_pose_estimator_py
+ARG SERVICE_EXECUTABLE_NAME=ibpc_pose_estimator
+
+WORKDIR /home/bpc_na_vinci_code/ros_ws
+
+RUN apt-get update \
+    && rosdep update \
+    && rosdep install --from-paths . --ignore-src --rosdistro jazzy -y \
+    && . /opt/ros/jazzy/setup.sh \
+    && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release \
+                 --event-handlers=console_direct+ \
+                 --merge-install
+
+
+
+
+RUN apt-get update \
+    &&  apt install -y ros-jazzy-rmw-zenoh-cpp python3-imageio python3-png python3-pip python3-scipy python3-fastapi python3-requests\
+    && rm -rf /var/lib/apt/lists/*
+# 
+# COPY --from=overlay /opt/ros/underlay/install /opt/ros/underlay/install
+# COPY --from=overlay /opt/ros/overlay/install /opt/ros/overlay/install
+# 
+# RUN sed --in-place \
+#     --expression '$isource "/opt/ros/overlay/install/setup.bash"' \
+#     /ros_entrypoint.sh
+# 
+ENV SERVICE_PACKAGE=${SERVICE_PACKAGE}
+ENV SERVICE_EXECUTABLE_NAME=${SERVICE_EXECUTABLE_NAME}
+ENV MODEL_DIR=/opt/ros/underlay/install/models
+
+WORKDIR /home/bpc_na_vinci_code/ros_ws/bpc
+
+# we need to execute /home/bpc_na_vinci_code/bpc/pipeline.py using the conda environment
+# we also need to run the ros2 service but not in the conda environment, the service should be in /home/bpc_na_vinci_code/ros_ws/install/ibpc_pose_estimator_py/lib/ibpc_pose_estimator_py/ibpc_pose_estimator
+
+RUN . /opt/miniconda/bin/activate foundationpose \
+    && python -m pip install --no-cache-dir uvicorn requests cv_bridge ninja imageio PyOpenGL glfw xatlas gdown
+
+RUN apt-get update && apt-get install -y ninja-build
+
+
+
+# nvdiffrast troubleshooting
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    pkg-config \
+    libglvnd0 \
+    libgl1 \
+    libglx0 \
+    libegl1 \
+    libgles2 \
+    libglvnd-dev \
+    libgl1-mesa-dev \
+    libegl1-mesa-dev \
+    libgles2-mesa-dev \
+    cmake \
+    curl
+    
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+ENV LD_LIBRARY_PATH=/usr/lib64
+ENV LD_LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib:$LD_LIBRARY_PATH
+ENV LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib
+
+
+
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
+ENV PYOPENGL_PLATFORM=egl
+ENV LDFLAGS="-L/opt/miniconda/envs/foundationpose/lib"
+
+RUN ln -s /opt/miniconda/envs/foundationpose/lib/libcudart.so /usr/lib/libcudart.so
+
+# for whatever reason, this stupid thing is looking in lib64  in /opt/miniconda/envs/foundationpose/ and not in lib
+
+RUN mkdir /opt/miniconda/envs/foundationpose/lib64
+RUN ln -s /opt/miniconda/envs/foundationpose/lib/libcudart.so /opt/miniconda/envs/foundationpose/lib64/libcudart.so 
+# the above command works but don't question it 
+# I am also not going to touch everything between the `# nvdiffrast troubleshooting` comment and this one as I don't knwo what could break
+
+
+ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && source /home/bpc_na_vinci_code/ros_ws/install/setup.bash && ros2 run ${SERVICE_PACKAGE} ${SERVICE_EXECUTABLE_NAME} & . /opt/miniconda/bin/activate foundationpose && python3 /home/bpc_na_vinci_code/bpc/pipeline.py"]
+
+# ENTRYPOINT ["/bin/bash"]
+
+
+
+
