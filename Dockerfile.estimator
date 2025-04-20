@@ -68,25 +68,32 @@ ADD ./bpc_navinci_code.yml /home/bpc_na_vinci_code/bpc_navinci_code.yml
 # set CMAKE_PREFIX_PATH for dependencies
 RUN . /opt/miniconda/bin/activate && export CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3"
 
-# install CONDA env
-RUN . /opt/miniconda/bin/activate && conda create --name foundationpose python=3.9
-# install additional packages in the foundationpose conda environment
-RUN . /opt/miniconda/bin/activate && conda install -n foundationpose -c "nvidia/label/cuda-11.8.0" cuda-toolkit -y \
-    && conda install -n foundationpose -c conda-forge gcc=11 gxx=11 -y \
-    && conda install -n foundationpose -c conda-forge boost-cpp -y \
-    && conda install conda-forge::eigen=3.4.0
-
 # add just the requirements.txt file in /temp/requirements.txt
 ADD ./bpc/sixD_pose_estimation/FoundationPose/requirements.txt /temp/requirements.txt
 
 # install the requirements from the requirements.txt file in ./bpc/sixD_pose_estimate/FoundationPose
-RUN . /opt/miniconda/bin/activate foundationpose \
-    && python -m pip install -r /temp/requirements.txt
 
-RUN . /opt/miniconda/bin/activate foundationpose \
-    #&& python -m pip install -r /home/bpc_na_vinci_code/requirements.txt \
+# create CONDA env
+RUN . /opt/miniconda/bin/activate && conda create --name foundationpose python=3.9
+
+# RUN . /opt/miniconda/bin/activate foundationpose \
+#     && python -m pip install -r /temp/requirements.txt
+# install additional packages in the foundationpose conda environment
+
+RUN . /opt/miniconda/bin/activate foundationpose\
+    && python -m pip install -r /temp/requirements.txt \
+    && conda install -n foundationpose -c "nvidia/label/cuda-11.8.0" cuda-toolkit -y \
+    && conda install -n foundationpose -c conda-forge gcc=11 gxx=11 boost-cpp eigen=3.4.0 -y \
+    && conda clean --all -y \
     && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git \
-    && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu118_pyt200/download.html
+    && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu118_pyt200/download.html \
+    && rm -rf /root/.cache /opt/conda/pkgs/*
+
+
+# RUN . /opt/miniconda/bin/activate foundationpose \
+#     #&& python -m pip install -r /home/bpc_na_vinci_code/requirements.txt \
+#     && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-cache-dir git+https://github.com/NVlabs/nvdiffrast.git \
+#     && CMAKE_PREFIX_PATH="$CMAKE_PREFIX_PATH:$CONDA_PREFIX/include/eigen3" python -m pip install --no-index --no-cache-dir pytorch3d -f https://dl.fbaipublicfiles.com/pytorch3d/packaging/wheels/py39_cu118_pyt200/download.html
 
 
 # add every directory in . except for `datasets`
