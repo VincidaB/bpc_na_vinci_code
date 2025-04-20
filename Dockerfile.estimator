@@ -90,13 +90,13 @@ RUN . /opt/miniconda/bin/activate foundationpose \
 
 
 # add every directory in . except for `datasets`
-#! need to add a .dockerignore file to ignore the datasets folder
 ADD ./bpc /home/bpc_na_vinci_code/bpc
 ADD ./ros_ws /home/bpc_na_vinci_code/ros_ws
 ADD ./meshes /home/bpc_na_vinci_code/meshes
 
 
-RUN rm -rf /home/bpc_na_vinci_code/datasets
+
+# RUN rm -rf /home/bpc_na_vinci_code/datasets
 WORKDIR /home/bpc_na_vinci_code/
 
 
@@ -120,7 +120,8 @@ RUN apt-get update \
     && . /opt/ros/jazzy/setup.sh \
     && colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release \
                  --event-handlers=console_direct+ \
-                 --merge-install
+                 --merge-install \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN apt-get update \
     &&  apt install -y ros-jazzy-rmw-zenoh-cpp python3-imageio python3-png python3-pip python3-scipy python3-fastapi python3-requests\
@@ -176,7 +177,7 @@ ENV PYTHONUNBUFFERED=1
 ENV NVIDIA_VISIBLE_DEVICES=all
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,graphics
 ENV PYOPENGL_PLATFORM=egl
-ENV LDFLAGS="-L/opt/miniconda/envs/foundationpose/lib"
+# ENV LDFLAGS="-L/opt/miniconda/envs/foundationpose/lib"
 
 RUN ln -s /opt/miniconda/envs/foundationpose/lib/libcudart.so /usr/lib/libcudart.so
 
@@ -184,14 +185,23 @@ RUN ln -s /opt/miniconda/envs/foundationpose/lib/libcudart.so /usr/lib/libcudart
 
 RUN mkdir /opt/miniconda/envs/foundationpose/lib64
 RUN ln -s /opt/miniconda/envs/foundationpose/lib/libcudart.so /opt/miniconda/envs/foundationpose/lib64/libcudart.so 
+
+# RUN mkdir -p /opt/miniconda/envs/foundationpose/lib64 \
+#  && ln -sf /opt/miniconda/envs/foundationpose/lib/libnvrtc.so* /opt/miniconda/envs/foundationpose/lib64/ \
+#  && ln -sf /opt/miniconda/envs/foundationpose/lib/libcudnn* /opt/miniconda/envs/foundationpose/lib64/
+
 # the above command works but don't question it 
 # I am also not going to touch everything between the `# nvdiffrast troubleshooting` comment and this one as I don't knwo what could break
 
-
-ENTRYPOINT ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && source /home/bpc_na_vinci_code/ros_ws/install/setup.bash && ros2 run ${SERVICE_PACKAGE} ${SERVICE_EXECUTABLE_NAME} & . /opt/miniconda/bin/activate foundationpose && python3 /home/bpc_na_vinci_code/bpc/pipeline.py"]
-
-# ENTRYPOINT ["/bin/bash"]
+#ENV LD_LIBRARY_PATH="/opt/miniconda/envs/foundationpose/lib:/opt/miniconda/envs/foundationpose/lib64:/usr/local/cuda/lib64"
 
 
+# CMD ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && source /home/bpc_na_vinci_code/ros_ws/install/setup.bash && ros2 run ${SERVICE_PACKAGE} ${SERVICE_EXECUTABLE_NAME} & . /opt/miniconda/bin/activate foundationpose && python3 /home/bpc_na_vinci_code/bpc/pipeline.py"]
 
 
+# reversed order of the commands
+CMD ["/bin/bash", "-c", ". /opt/miniconda/bin/activate foundationpose && LD_LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib64:/opt/miniconda/envs/foundationpose/lib:/usr/local/cuda/lib64:$LD_LIBRARY_PATH python3 /home/bpc_na_vinci_code/bpc/pipeline.py & source /opt/ros/jazzy/setup.bash && source /home/bpc_na_vinci_code/ros_ws/install/setup.bash && ros2 run ${SERVICE_PACKAGE} ${SERVICE_EXECUTABLE_NAME} "]
+
+# CMD ["/bin/bash", "-c", ". /opt/miniconda/bin/activate foundationpose && python3 /home/bpc_na_vinci_code/bpc/pipeline.py & source /opt/ros/jazzy/setup.bash && source /home/bpc_na_vinci_code/ros_ws/install/setup.bash && ros2 run ${SERVICE_PACKAGE} ${SERVICE_EXECUTABLE_NAME} "]
+
+# CMD ["/bin/bash"]

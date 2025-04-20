@@ -113,4 +113,5 @@ def estimate_pose(req: PoseRequest):
 
 if __name__ == "__main__":
     # start the pipeline
+    print("LD_LIBRARY_PATH:", os.environ.get("LD_LIBRARY_PATH"))
     uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -1,0 +1,10 @@
+datasets/
+bpc/segmentation/sam2_models/
+bpc/segmentation/sam2_repo/
+bpc/segmentation/cnos/
+
+bpc/2D_detection/wandb/
+bpc/2D_detection/results/
+
+bpc/2D_detection/yolo11_ipd/
+!bpc/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt
