@@ -19,6 +19,9 @@ from pathlib import Path
 
 import requests
 import json
+import base64
+
+import time
 
 # Add the path three directories up to the system path
 # Adjust the path to match the folder structure
@@ -148,8 +151,6 @@ class PoseEstimator(Node):
             self.get_logger().error("Failed to load image. Exiting...")
             return response
 
-        import base64
-
         image_bytes = cv2.imencode(".png", image)[1].tobytes()
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
@@ -179,8 +180,26 @@ class PoseEstimator(Node):
             "cam_1_intrinsics": intrinsics,
             "cam_1_extrinsics": camera_pose,
         }
+        max_retries = 5
+        retry_delay = 2  # seconds
 
-        res = requests.post("http://127.0.0.1:8000/estimate", json=payload)
+        for attempt in range(max_retries):
+            try:
+                res = requests.post("http://127.0.0.1:8000/estimate", json=payload)
+                if res.ok:
+                    break
+                else:
+                    self.get_logger().warn(
+                        f"Attempt {attempt + 1} failed with status code {res.status_code}. Retrying..."
+                    )
+            except requests.exceptions.RequestException as e:
+                self.get_logger().error(f"Request failed: {e}. Retrying...")
+                time.sleep(retry_delay)
+        else:
+            self.get_logger().error(
+                "Max retries reached. Unable to get a response from the server."
+            )
+            return response
         print("Response status code: ", res.status_code)
         print("Response content: ", res.content)
 

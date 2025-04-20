@@ -122,9 +122,6 @@ RUN apt-get update \
                  --event-handlers=console_direct+ \
                  --merge-install
 
-
-
-
 RUN apt-get update \
     &&  apt install -y ros-jazzy-rmw-zenoh-cpp python3-imageio python3-png python3-pip python3-scipy python3-fastapi python3-requests\
     && rm -rf /var/lib/apt/lists/*
@@ -140,7 +137,7 @@ ENV SERVICE_PACKAGE=${SERVICE_PACKAGE}
 ENV SERVICE_EXECUTABLE_NAME=${SERVICE_EXECUTABLE_NAME}
 ENV MODEL_DIR=/opt/ros/underlay/install/models
 
-WORKDIR /home/bpc_na_vinci_code/ros_ws/bpc
+WORKDIR /home/bpc_na_vinci_code/ros_ws
 
 # we need to execute /home/bpc_na_vinci_code/bpc/pipeline.py using the conda environment
 # we also need to run the ros2 service but not in the conda environment, the service should be in /home/bpc_na_vinci_code/ros_ws/install/ibpc_pose_estimator_py/lib/ibpc_pose_estimator_py/ibpc_pose_estimator
@@ -170,9 +167,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-ENV LD_LIBRARY_PATH=/usr/lib64
-ENV LD_LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib:$LD_LIBRARY_PATH
-ENV LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib
+# ENV LD_LIBRARY_PATH=/usr/lib64
+# ENV LD_LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib:$LD_LIBRARY_PATH
+# ENV LIBRARY_PATH=/opt/miniconda/envs/foundationpose/lib
 
 
 

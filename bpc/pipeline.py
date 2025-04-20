@@ -28,7 +28,6 @@ pipeline = pipeline_alpha(
 )
 
 
-
 app = FastAPI()
 
 
