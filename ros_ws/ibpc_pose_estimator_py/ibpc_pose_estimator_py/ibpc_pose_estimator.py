@@ -173,8 +173,10 @@ class PoseEstimator(Node):
         self.get_logger().info("Camera intrinsics: " + str(intrinsics))
         self.get_logger().info("Camera extrinsics: " + str(camera_pose))
 
+        object_ids = request.object_ids.tolist()
+
         payload = {
-            "object_ids": [18],
+            "object_ids": object_ids,
             "cam_1": image_base64,
             "cam_1_depth": depth_payload,
             "cam_1_intrinsics": intrinsics,

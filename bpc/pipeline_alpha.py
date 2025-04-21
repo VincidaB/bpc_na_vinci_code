@@ -261,6 +261,7 @@ class pipeline_alpha:
 
             # TODO: we need to get the object id from the detection, currently we are using a 2D detector that only predicts obj_18, so we will use that for now
             # TODO: change this to load model from dataset path, maybe even the eval one
+            print(f"Object ids to detect : {object_ids}")
             for i, object_id in enumerate(object_ids):
                 if object_id != 18:
                     print(
@@ -312,38 +313,38 @@ class pipeline_alpha:
                     )
 
                     print(f"self.debug: {self.debug}")
-                    if self.debug >= 3:
-                        print("self.debug>=3")
-                        m = mesh.copy()
-                        m.apply_transform(pose)
-                        m.export(f"{self.debug_dir}/model_tf.obj")
-                        xyz_map = depth2xyzmap(depth, cam_k)
-                        valid = depth >= 0.001
-                        pcd = toOpen3dCloud(xyz_map[valid], color[valid])
-                        o3d.io.write_point_cloud(
-                            f"{self.debug_dir}/scene_complete.ply", pcd
-                        )
+                    # if self.debug >= 3:
+                    #     print("self.debug>=3")
+                    #     m = mesh.copy()
+                    #     m.apply_transform(pose)
+                    #     m.export(f"{self.debug_dir}/model_tf.obj")
+                    #     xyz_map = depth2xyzmap(depth, cam_k)
+                    #     valid = depth >= 0.001
+                    #     pcd = toOpen3dCloud(xyz_map[valid], color[valid])
+                    #     o3d.io.write_point_cloud(
+                    #         f"{self.debug_dir}/scene_complete.ply", pcd
+                    #     )
 
-                    if self.debug >= 1:
-                        center_pose = pose @ np.linalg.inv(to_origin)
-                        vis = draw_posed_3d_box(
-                            cam_k, img=color, ob_in_cam=center_pose, bbox=bbox
-                        )
-                        vis = draw_xyz_axis(
-                            color,
-                            ob_in_cam=center_pose,
-                            scale=0.1,
-                            K=cam_k,
-                            thickness=3,
-                            transparency=0,
-                            is_input_rgb=True,
-                        )
-                        cv2.imshow("1", vis[..., ::-1])
-                        cv2.waitKey(10)
+                    # if self.debug >= 1:
+                    #     center_pose = pose @ np.linalg.inv(to_origin)
+                    #     vis = draw_posed_3d_box(
+                    #         cam_k, img=color, ob_in_cam=center_pose, bbox=bbox
+                    #     )
+                    #     vis = draw_xyz_axis(
+                    #         color,
+                    #         ob_in_cam=center_pose,
+                    #         scale=0.1,
+                    #         K=cam_k,
+                    #         thickness=3,
+                    #         transparency=0,
+                    #         is_input_rgb=True,
+                    #     )
+                    #     cv2.imshow("1", vis[..., ::-1])
+                    #     cv2.waitKey(10)
 
-                    if self.debug >= 2:
-                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                        imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
+                    # if self.debug >= 2:
+                    #     os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                    #     imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
 
                     #! change the confidence (maybe use the score from the detection)
 

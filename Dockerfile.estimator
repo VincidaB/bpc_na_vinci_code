@@ -97,8 +97,7 @@ RUN . /opt/miniconda/bin/activate foundationpose\
 
 
 # add every directory in . except for `datasets`
-ADD ./bpc /home/bpc_na_vinci_code/bpc
-ADD ./ros_ws /home/bpc_na_vinci_code/ros_ws
+ADD ./bpc/sixD_pose_estimation/FoundationPose /home/bpc_na_vinci_code/bpc/sixD_pose_estimation/FoundationPose
 ADD ./meshes /home/bpc_na_vinci_code/meshes
 
 
@@ -116,6 +115,9 @@ RUN . /opt/miniconda/bin/activate foundationpose && CMAKE_PREFIX_PATH=$CMAKE_PRE
 # # result stage: base + copied install folders from the overlay + service setup.
 
 # 
+
+
+ADD ./ros_ws /home/bpc_na_vinci_code/ros_ws
 ARG SERVICE_PACKAGE=ibpc_pose_estimator_py
 ARG SERVICE_EXECUTABLE_NAME=ibpc_pose_estimator
 
@@ -204,6 +206,13 @@ RUN ln -s /opt/miniconda/envs/foundationpose/lib/libcudart.so /opt/miniconda/env
 
 
 # CMD ["/bin/bash", "-c", "source /opt/ros/jazzy/setup.bash && source /home/bpc_na_vinci_code/ros_ws/install/setup.bash && ros2 run ${SERVICE_PACKAGE} ${SERVICE_EXECUTABLE_NAME} & . /opt/miniconda/bin/activate foundationpose && python3 /home/bpc_na_vinci_code/bpc/pipeline.py"]
+
+# this is overwriting /bpc/sixD_pose_estimation/FoundationPose but I don't want it to do so
+ADD ./bpc/segmentation /home/bpc_na_vinci_code/bpc/segmentation
+ADD ./bpc/2D_detection /home/bpc_na_vinci_code/bpc/2D_detection
+ADD ./bpc/pipeline.py /home/bpc_na_vinci_code/bpc/pipeline.py
+ADD ./bpc/pipeline_alpha.py /home/bpc_na_vinci_code/bpc/pipeline_alpha.py
+
 
 
 # reversed order of the commands
