@@ -22,8 +22,16 @@ code_dir = os.path.dirname(__file__)
 
 # detector_paths is now a dict where the key is the object id and the value is the path to the model
 detectors = {
-    11: f"{code_dir}/2D_detection/yolo11-detection-obj_11.pt",
+    0: f"{code_dir}/2D_detection/weights/obj_0/yolo11-detection-obj_0.pt",
+    1: f"{code_dir}/2D_detection/weights/obj_1/yolo11-detection-obj_1.pt",
+    4: f"{code_dir}/2D_detection/weights/obj_4/yolo11-detection-obj_4.pt",
+    8: f"{code_dir}/2D_detection/weights/obj_8/yolo11-detection-obj_8.pt",
+    10: f"{code_dir}/2D_detection/weights/obj_10/yolo11-detection-obj_10.pt",
+    11: f"{code_dir}/2D_detection/weights/obj_11/yolo11-detection-obj_11.pt",
+    14: f"{code_dir}/2D_detection/weights/obj_14/yolo11-detection-obj_14.pt",
     18: f"{code_dir}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+    19: f"{code_dir}/2D_detection/weights/obj_19/yolo11-detection-obj_19.pt",
+    20: f"{code_dir}/2D_detection/weights/obj_20/yolo11-detection-obj_20.pt",
 }
 
 

@@ -175,8 +175,16 @@ class pipeline_alpha:
 
         # this is used to only consider the objects that we can handle, for now just the 18 (maybe 11 as well ?)
         self.objects_to_consider = [
-            # 11,
+            0,
+            1,
+            4,
+            8,
+            10,
+            11,
+            14,
             18,
+            19,
+            10,
         ]
         # Initialize detectors as a dictionary where keys are object ids and values are YOLO objects
         self.detectors = {}
@@ -186,7 +194,12 @@ class pipeline_alpha:
                 print(
                     f"Detector model not found at {path}, removing object {object_id} from objects_to_consider"
                 )
-                self.objects_to_consider.remove(object_id)
+                try:
+                    self.objects_to_consider.remove(object_id)
+                except ValueError:
+                    print(
+                        f"Object {object_id} not found in objects_to_consider, skipping removal"
+                    )
                 continue
             self.detectors[object_id] = YOLO(path)
 
@@ -252,6 +265,7 @@ class pipeline_alpha:
             color = cam.rgb
             depth = cam.depth
             color_resized = resize(color, self.resize_factor)
+            color_resized_viz = color_resized.copy()
             depth = resize(depth, self.resize_factor)
 
             # Convert depth to float32 and scale down properly
@@ -369,7 +383,8 @@ class pipeline_alpha:
                 mesh.apply_transform(
                     np.diag([0.001, 0.001, 0.001, 1])
                 )  #! annnoying to remember, this should be baked in one of the method calls
-                self.est.set_model(mesh.vertices, mesh.vertex_normals, mesh=mesh)
+                print("Setting model in the FoundationPoseEstimator !")
+                self.est.set_model(mesh.vertices, mesh.vertex_normals, mesh=mesh, model_id=object_id)
 
                 # for debug modes
                 if self.debug >= 1:
@@ -402,24 +417,6 @@ class pipeline_alpha:
                             f"{self.debug_dir}/scene_complete.ply", pcd
                         )
 
-                    if self.debug >= 1:
-                        center_pose = pose @ np.linalg.inv(to_origin)
-                        vis = draw_posed_3d_box(
-                            cam_k, img=color, ob_in_cam=center_pose, bbox=bbox
-                        )
-                        vis = draw_xyz_axis(
-                            color,
-                            ob_in_cam=center_pose,
-                            scale=0.1,
-                            K=cam_k,
-                            thickness=3,
-                            transparency=0,
-                            is_input_rgb=True,
-                        )
-                        # cv2.imshow("1", vis[..., ::-1])
-                        # cv2.waitKey(10)
-                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                        imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
 
                     os.makedirs(f"{self.debug_dir}/ob_in_cam", exist_ok=True)
                     np.savetxt(
@@ -441,6 +438,7 @@ class pipeline_alpha:
                     )
 
                     world_position = Rc @ estimated_position + Tc
+                    world_position *= 1000.0  # convert to mm
                     world_rotation = Rc @ estimated_rotation
                     r = Rotation.from_matrix(world_rotation)
                     quat = r.as_quat().tolist()
@@ -461,6 +459,27 @@ class pipeline_alpha:
                         "pose": pose_not_msg,
                     }
                     pose_estimates.append(pose_estimate)
+                
+                    if self.debug >= 1:
+                        center_pose = pose @ np.linalg.inv(to_origin)
+                            
+                        vis = draw_posed_3d_box(
+                            cam_k, img=color_resized_viz, ob_in_cam=center_pose, bbox=bbox
+                        )
+                        vis = draw_xyz_axis(
+                            color_resized_viz,
+                            ob_in_cam=center_pose,
+                            scale=0.1,
+                            K=cam_k,
+                            thickness=3,
+                            transparency=0,
+                            is_input_rgb=True,
+                        )
+
+                if self.debug >=1:
+                    os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                    imageio.imwrite(f"{self.debug_dir}/track_vis/{self.image_number}.png", vis)
+
 
         self.image_number += 1
         return pose_estimates
