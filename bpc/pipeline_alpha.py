@@ -158,7 +158,7 @@ class pipeline_alpha:
 
     def __init__(
         self,
-        detector_path: str,
+        detector_paths: dict,
         segmentor_path: str,
         resize_factor: float = 0.185,
         debug: int = 3,
@@ -166,11 +166,30 @@ class pipeline_alpha:
 
         self.resize_factor = resize_factor
         self.debug = debug
-        self.debug_dir = f"{os.path.dirname(__file__)}/debug"
-        # os.system(f'rm -rf {self.debug_dir}/* && mkdir -p {self.debug_dir}/track_vis {self.debug_dir}/ob_in_cam')
+        # self.debug_dir = f"{os.path.dirname(__file__)}/debug"
+        self.debug_dir = f"/home/debug"
+        os.system(
+            f"rm -rf {self.debug_dir}/* && mkdir -p {self.debug_dir}/track_vis {self.debug_dir}/ob_in_cam"
+        )
         print(f"debug dir: {self.debug_dir}")
 
-        self.detector = YOLO(detector_path)
+        # this is used to only consider the objects that we can handle, for now just the 18 (maybe 11 as well ?)
+        self.objects_to_consider = [
+            # 11,
+            18,
+        ]
+        # Initialize detectors as a dictionary where keys are object ids and values are YOLO objects
+        self.detectors = {}
+        for object_id, path in detector_paths.items():
+            print(f"Initializing detector for object {object_id} with model at: {path}")
+            if not os.path.exists(path):
+                print(
+                    f"Detector model not found at {path}, removing object {object_id} from objects_to_consider"
+                )
+                self.objects_to_consider.remove(object_id)
+                continue
+            self.detectors[object_id] = YOLO(path)
+
         print(f"Initializing segmentor with the model located at: {segmentor_path}")
         if not os.path.exists(segmentor_path):
             raise FileNotFoundError(f"Segmentor model not found at {segmentor_path}")
@@ -197,6 +216,7 @@ class pipeline_alpha:
             debug=self.debug,
             glctx=self.glctx,
         )
+        self.image_number = 0
 
     def get_pose_estimates(
         self,
@@ -216,6 +236,14 @@ class pipeline_alpha:
             # cam_2,
             # cam_3
         ]
+
+        # intersection of object_ids and the objects_to_onsider
+        objects_to_detect = list(
+            set(object_ids).intersection(set(self.objects_to_consider))
+        )
+        print(f"object_ids  : {object_ids}")
+        print(f"Objects to detect: {objects_to_detect}")
+
         for cam in cameras_to_use:
             cam_k = scale_cam_k(cam.intrinsics, self.resize_factor)
             print(f"Camera intrinsics matrix (cam_K): {cam_k}")
@@ -223,31 +251,8 @@ class pipeline_alpha:
 
             color = cam.rgb
             depth = cam.depth
-
-            # TODO : decide on what part of the pipeline gets the scaled down image
-
-            # 2D detection
-            results = self.detector(color)
-            boxes = results[0].cpu().boxes.numpy().xyxy
-            # TODO : check if the boxes are empty, we need to return an empty pose list in that case
-            if len(boxes) == 0:
-                print("No boxes detected")
-                continue
-
-            # Segmentation
-            everything_results = self.segmentor_predictor(color)
-            print(f"Found {len(everything_results[0].masks)} masks in the image")
-            print(f"Found {len(results[0].boxes)} boxes in the image")
-            bbox_results = self.segmentor_predictor.prompt(
-                everything_results, bboxes=boxes
-            )
-
-            # save a mask image for each objects
-            masks = self.generate_masks(bbox_results)
-            color = resize(color, self.resize_factor)
+            color_resized = resize(color, self.resize_factor)
             depth = resize(depth, self.resize_factor)
-
-            # max value in depth :
 
             # Convert depth to float32 and scale down properly
             depth = depth.astype(np.float32)
@@ -259,18 +264,106 @@ class pipeline_alpha:
             # plt.colorbar()
             # plt.show()
 
-            # TODO: we need to get the object id from the detection, currently we are using a 2D detector that only predicts obj_18, so we will use that for now
-            # TODO: change this to load model from dataset path, maybe even the eval one
-            print(f"Object ids to detect : {object_ids}")
-            for i, object_id in enumerate(object_ids):
-                if object_id != 18:
-                    print(
-                        f"currently, only object 18 is supported, skipping {object_id}"
-                    )
+            # TODO : decide on what part of the pipeline gets the scaled down image
+
+            # 2D detection --> segmentation --> 3D pose estimation (per object)
+            for i, object_id in enumerate(objects_to_detect):
+                pass
+                results = self.detectors[object_id](color)
+                boxes = results[0].cpu().boxes.numpy().xyxy
+                # TODO : check if the boxes are empty, we need to return an empty pose list in that case
+                if len(boxes) == 0:
+                    print("No boxes detected")
                     continue
 
+                # Segmentation
+                everything_results = self.segmentor_predictor(color)
+                print(f"Found {len(everything_results[0].masks)} masks in the image")
+                print(f"Found {len(results[0].boxes)} boxes in the image")
+                bbox_results = self.segmentor_predictor.prompt(
+                    everything_results, bboxes=boxes
+                )
+
+                # save a mask image for each objects
+                masks = self.generate_masks(bbox_results)
+
+                reordered_masks = []
+                # reorder the masks so that they match the boxes from the detection, we can use the intersection to do that
+                # we do that because the masks are not in the same order as the boxes and we want to match them to "propagate the score"
+                for b, box in enumerate(boxes):
+                    # Convert bounding box coordinates to integers
+                    x_min, y_min, x_max, y_max = map(int, box)
+                    # multiply by the resize factor to get the original coordinates
+                    x_min = int(x_min * self.resize_factor)
+                    y_min = int(y_min * self.resize_factor)
+                    x_max = int(x_max * self.resize_factor)
+                    y_max = int(y_max * self.resize_factor)
+
+                    print(f"Box {b}: ({x_min}, {y_min}), ({x_max}, {y_max})")
+                    max_intersection = 0
+                    best_mask = None
+
+                    for m, mask in enumerate(masks):
+                        # Extract the region of interest (ROI) from the mask
+                        roi = mask[y_min:y_max, x_min:x_max]
+
+                        # Ensure the ROI dimensions match the bounding box
+                        if roi.shape[0] == 0 or roi.shape[1] == 0:
+                            print(f"Skipping mask {m} due to invalid ROI dimensions")
+                            print(
+                                f"ROI shape: {roi.shape}, Box shape: {(y_max - y_min, x_max - x_min)}"
+                            )
+                            continue
+
+                        # Calculate the intersection and union
+
+                        # the intersection is the number of white pixels that are in the roi
+                        intersection = roi > 0
+
+                        # Count the number of "white" pixels in the intersection and union
+                        intersection_count = np.sum(intersection)
+
+                        # Calculate IoU
+
+                        print(
+                            f"Mask {m} has an intersection of {intersection_count} pixels with box {b}"
+                        )
+
+                        if intersection_count > max_intersection:
+                            max_intersection = intersection_count
+                            best_mask = mask
+
+                    if best_mask is not None:
+                        reordered_masks.append(best_mask)
+                    else:
+                        print(f"No mask found for box {b}, using the first mask")
+                        reordered_masks.append(masks[0])
+
+                masks = reordered_masks
+
+                # save the masks, 2D detections in the debug directory as images
+                if self.debug >= 1:
+                    os.makedirs(f"{self.debug_dir}/2d_detections", exist_ok=True)
+                    os.makedirs(f"{self.debug_dir}/mask", exist_ok=True)
+
+                    img = results[0].plot()
+
+                    imageio.imwrite(
+                        f"{self.debug_dir}/2d_detections/{self.image_number}-obj{object_id}.png",
+                        img.astype(np.uint8),
+                    )
+                    for m, mask in enumerate(masks):
+                        os.makedirs(
+                            f"{self.debug_dir}/mask/{self.image_number}", exist_ok=True
+                        )
+
+                        associated_2D_conf = results[0].boxes.conf[m]
+                        imageio.imwrite(
+                            f"{self.debug_dir}/mask/{self.image_number}/{m}-conf2d-{associated_2D_conf:.4f}.png",
+                            mask.astype(np.uint8),
+                        )
+
                 mesh_file = f"{code_dir}/../meshes/models/obj_{object_id:06d}.ply"
-                # mesh_file = "/media/vincent/more/bpc_teamname/bpc/sixD_pose_estimation/FoundationPose/demo_data/ipd_val_0/mesh/obj_000018.obj"
                 print(f"Loading mesh from {mesh_file}")
                 mesh = trimesh.load(mesh_file)
                 mesh.apply_transform(
@@ -279,75 +372,65 @@ class pipeline_alpha:
                 self.est.set_model(mesh.vertices, mesh.vertex_normals, mesh=mesh)
 
                 # for debug modes
-                to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
-                bbox = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
+                if self.debug >= 1:
+                    to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
+                    bbox = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
 
                 for j, mask in enumerate(masks):
-
-                    # save color, depth and mask images in the debug directory
-                    os.makedirs(f"{self.debug_dir}/mask", exist_ok=True)
-                    os.makedirs(f"{self.debug_dir}/color", exist_ok=True)
-                    os.makedirs(f"{self.debug_dir}/depth", exist_ok=True)
-
-                    imageio.imwrite(
-                        f"{self.debug_dir}/mask/{i}-{j}.png", mask.astype(np.uint8)
-                    )
-                    imageio.imwrite(
-                        f"{self.debug_dir}/color/{i}-{j}.png", color.astype(np.uint8)
-                    )
-                    imageio.imwrite(
-                        f"{self.debug_dir}/depth/{i}-{j}.png",
-                        (depth * 10000).astype(np.uint16),
-                    )
+                    associated_2D_conf = results[0].boxes.conf[j]
 
                     pose = self.est.register(
-                        K=cam_k, rgb=color, depth=depth, ob_mask=mask, iteration=3
+                        K=cam_k,
+                        rgb=color_resized,
+                        depth=depth,
+                        ob_mask=mask,
+                        iteration=3,
                     )
                     estimated_position = pose[:3, 3]
                     estimated_rotation = pose[:3, :3]
-                    # pose_msg = Pose()
+
+                    print(f"self.debug: {self.debug}")
+                    if self.debug >= 3:
+                        print("self.debug>=3")
+                        m = mesh.copy()
+                        m.apply_transform(pose)
+                        m.export(f"{self.debug_dir}/model_tf.obj")
+                        xyz_map = depth2xyzmap(depth, cam_k)
+                        valid = depth >= 0.001
+                        pcd = toOpen3dCloud(xyz_map[valid], color[valid])
+                        o3d.io.write_point_cloud(
+                            f"{self.debug_dir}/scene_complete.ply", pcd
+                        )
+
+                    if self.debug >= 1:
+                        center_pose = pose @ np.linalg.inv(to_origin)
+                        vis = draw_posed_3d_box(
+                            cam_k, img=color, ob_in_cam=center_pose, bbox=bbox
+                        )
+                        vis = draw_xyz_axis(
+                            color,
+                            ob_in_cam=center_pose,
+                            scale=0.1,
+                            K=cam_k,
+                            thickness=3,
+                            transparency=0,
+                            is_input_rgb=True,
+                        )
+                        # cv2.imshow("1", vis[..., ::-1])
+                        # cv2.waitKey(10)
+                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                        imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
 
                     os.makedirs(f"{self.debug_dir}/ob_in_cam", exist_ok=True)
                     np.savetxt(
                         f"{self.debug_dir}/ob_in_cam/{i}-{j}.txt", pose.reshape(4, 4)
                     )
 
-                    print(f"self.debug: {self.debug}")
-                    # if self.debug >= 3:
-                    #     print("self.debug>=3")
-                    #     m = mesh.copy()
-                    #     m.apply_transform(pose)
-                    #     m.export(f"{self.debug_dir}/model_tf.obj")
-                    #     xyz_map = depth2xyzmap(depth, cam_k)
-                    #     valid = depth >= 0.001
-                    #     pcd = toOpen3dCloud(xyz_map[valid], color[valid])
-                    #     o3d.io.write_point_cloud(
-                    #         f"{self.debug_dir}/scene_complete.ply", pcd
-                    #     )
-
-                    # if self.debug >= 1:
-                    #     center_pose = pose @ np.linalg.inv(to_origin)
-                    #     vis = draw_posed_3d_box(
-                    #         cam_k, img=color, ob_in_cam=center_pose, bbox=bbox
-                    #     )
-                    #     vis = draw_xyz_axis(
-                    #         color,
-                    #         ob_in_cam=center_pose,
-                    #         scale=0.1,
-                    #         K=cam_k,
-                    #         thickness=3,
-                    #         transparency=0,
-                    #         is_input_rgb=True,
-                    #     )
-                    #     cv2.imshow("1", vis[..., ::-1])
-                    #     cv2.waitKey(10)
-
-                    # if self.debug >= 2:
-                    #     os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                    #     imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
+                    if self.debug >= 2:
+                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                        imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
 
                     #! change the confidence (maybe use the score from the detection)
-
                     print(f"Estimated position: {estimated_position}")
                     print(f"Estimated rotation: {estimated_rotation}")
 
@@ -357,14 +440,8 @@ class pipeline_alpha:
                         camera_pose[:3, :3], camera_pose[:3, 3] / 1000
                     )
 
-                    # Rc, Tc = camera_pose[:3, :3], camera_pose[:3, 3] /1000
-                    # print(f"Rc: {Rc}")
-                    # print(f"Tc: {Tc}")
                     world_position = Rc @ estimated_position + Tc
                     world_rotation = Rc @ estimated_rotation
-                    # print(f"Estimated world position: {world_position}")
-                    # print(f"Estimated world rotation: {world_rotation}")
-
                     r = Rotation.from_matrix(world_rotation)
                     quat = r.as_quat().tolist()
                     world_position = world_position.tolist()
@@ -374,13 +451,18 @@ class pipeline_alpha:
                     )  # concatenate the position and rotation
 
                     print(f"Pose but not a msg: {pose_not_msg}")
+
+                    conf = float(
+                        associated_2D_conf
+                    )  # it's apparently a dict sometimes, so this fixes the 0.00 values
                     pose_estimate = {
                         "object_id": object_id,
-                        "conf": 0.8,
+                        "conf": conf,
                         "pose": pose_not_msg,
                     }
                     pose_estimates.append(pose_estimate)
 
+        self.image_number += 1
         return pose_estimates
 
     def generate_masks(self, bbox_results):

@@ -20,8 +20,15 @@ from pipeline_alpha import Camera
 
 code_dir = os.path.dirname(__file__)
 
+# detector_paths is now a dict where the key is the object id and the value is the path to the model
+detectors = {
+    11: f"{code_dir}/2D_detection/yolo11-detection-obj_11.pt",
+    18: f"{code_dir}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+}
+
+
 pipeline = pipeline_alpha(
-    detector_path=f"{code_dir}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+    detector_paths=detectors,
     segmentor_path=f"{code_dir}/segmentation/FastSAM/weights/FastSAM-x.pt",
     resize_factor=0.185,
     debug=0,
@@ -89,26 +96,6 @@ def estimate_pose(req: PoseRequest):
     )
 
     return {"poses": poses}  # Ensure poses is JSON serializable
-
-    cam_1 = Camera(
-        frame_id="cam_1",
-        pose=np.array(req.cam_1_extrinsics).reshape((4, 4)),
-        intrinsics=np.array(req.cam_1_intrinsics).reshape((3, 3)),
-        rgb=img,
-        depth=depth,
-    )
-
-    poses = pipeline.get_pose_estimates(
-        object_ids=[18],
-        cam_1=cam_1,
-        cam_2=cam_1,
-        cam_3=cam_1,
-        photoneo=None,
-    )
-
-    poses = []  # TODO : Replace with actual pose estimation logic
-
-    return {"poses": poses}  # make sure poses is JSON serializable
 
 
 if __name__ == "__main__":
