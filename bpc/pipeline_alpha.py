@@ -43,6 +43,38 @@ import imageio
 code_dir = os.path.dirname(__file__)
 
 
+# shamelessly stolen from FoundationPose utils
+def symmetry_tfs_from_info(info, rot_angle_discrete=5):
+    symmetry_tfs = [np.eye(4)]
+    if "symmetries_discrete" in info:
+        tfs = np.array(info["symmetries_discrete"]).reshape(-1, 4, 4)
+        tfs[..., :3, 3] *= 0.001
+        symmetry_tfs = [np.eye(4)]
+        symmetry_tfs += list(tfs)
+    if "symmetries_continuous" in info and len(info["symmetries_continuous"]) > 0:
+        axis = np.array(info["symmetries_continuous"][0]["axis"]).reshape(3)
+        offset = info["symmetries_continuous"][0]["offset"]
+        rxs = [0]
+        rys = [0]
+        rzs = [0]
+        if axis[0] > 0:
+            rxs = np.arange(0, 360, rot_angle_discrete) / 180.0 * np.pi
+        elif axis[1] > 0:
+            rys = np.arange(0, 360, rot_angle_discrete) / 180.0 * np.pi
+        elif axis[2] > 0:
+            rzs = np.arange(0, 360, rot_angle_discrete) / 180.0 * np.pi
+        for rx in rxs:
+            for ry in rys:
+                for rz in rzs:
+                    tf = euler_matrix(rx, ry, rz)
+                    tf[:3, 3] = offset
+                    symmetry_tfs.append(tf)
+    if len(symmetry_tfs) == 0:
+        symmetry_tfs = [np.eye(4)]
+    symmetry_tfs = np.array(symmetry_tfs)
+    return symmetry_tfs
+
+
 def camera_pose_from_extrinsics(
     R: list[float], t: list[float]
 ) -> tuple[np.ndarray, np.ndarray]:
@@ -175,11 +207,11 @@ class pipeline_alpha:
 
         # this is used to only consider the objects that we can handle, for now just the 18 (maybe 11 as well ?)
         self.objects_to_consider = [
-            0,
-            1,
-            4,
-            8,
-            10,
+            # 0,
+            # 1,
+            # 4,
+            # 8,
+            # 10,
             11,
             14,
             18,
@@ -230,6 +262,16 @@ class pipeline_alpha:
             glctx=self.glctx,
         )
         self.image_number = 0
+
+        #! point to the correct file
+        info_file = f"{code_dir}/../meshes/models/models_info.json"
+        with open(info_file, "r") as ff:
+            info = json.load(ff)
+        self.symmetry_tfs = {}
+        for ob_id in self.objects_to_consider:
+            self.symmetry_tfs[ob_id] = symmetry_tfs_from_info(
+                info[str(ob_id)], rot_angle_discrete=5
+            )
 
     def get_pose_estimates(
         self,
@@ -384,7 +426,13 @@ class pipeline_alpha:
                     np.diag([0.001, 0.001, 0.001, 1])
                 )  #! annnoying to remember, this should be baked in one of the method calls
                 print("Setting model in the FoundationPoseEstimator !")
-                self.est.set_model(mesh.vertices, mesh.vertex_normals, mesh=mesh, model_id=object_id)
+                self.est.set_model(
+                    mesh.vertices,
+                    mesh.vertex_normals,
+                    mesh=mesh,
+                    model_id=object_id,
+                    symmetry_tfs=self.symmetry_tfs[object_id],
+                )
 
                 # for debug modes
                 if self.debug >= 1:
@@ -416,7 +464,6 @@ class pipeline_alpha:
                         o3d.io.write_point_cloud(
                             f"{self.debug_dir}/scene_complete.ply", pcd
                         )
-
 
                     os.makedirs(f"{self.debug_dir}/ob_in_cam", exist_ok=True)
                     np.savetxt(
@@ -459,12 +506,15 @@ class pipeline_alpha:
                         "pose": pose_not_msg,
                     }
                     pose_estimates.append(pose_estimate)
-                
+
                     if self.debug >= 1:
                         center_pose = pose @ np.linalg.inv(to_origin)
-                            
+
                         vis = draw_posed_3d_box(
-                            cam_k, img=color_resized_viz, ob_in_cam=center_pose, bbox=bbox
+                            cam_k,
+                            img=color_resized_viz,
+                            ob_in_cam=center_pose,
+                            bbox=bbox,
                         )
                         vis = draw_xyz_axis(
                             color_resized_viz,
@@ -476,10 +526,11 @@ class pipeline_alpha:
                             is_input_rgb=True,
                         )
 
-                if self.debug >=1:
+                if self.debug >= 1:
                     os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                    imageio.imwrite(f"{self.debug_dir}/track_vis/{self.image_number}.png", vis)
-
+                    imageio.imwrite(
+                        f"{self.debug_dir}/track_vis/{self.image_number}.png", vis
+                    )
 
         self.image_number += 1
         return pose_estimates
