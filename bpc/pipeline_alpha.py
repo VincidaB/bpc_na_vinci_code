@@ -447,7 +447,7 @@ class pipeline_alpha:
                         rgb=color_resized,
                         depth=depth,
                         ob_mask=mask,
-                        iteration=3,
+                        iteration=4,
                     )
                     estimated_position = pose[:3, 3]
                     estimated_rotation = pose[:3, :3]
