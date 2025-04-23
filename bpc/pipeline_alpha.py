@@ -207,11 +207,11 @@ class pipeline_alpha:
 
         # this is used to only consider the objects that we can handle, for now just the 18 (maybe 11 as well ?)
         self.objects_to_consider = [
-            # 0,
-            # 1,
-            # 4,
-            # 8,
-            # 10,
+            0,
+            1,
+            4,
+            8,
+            10,
             11,
             14,
             18,
