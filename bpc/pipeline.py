@@ -29,7 +29,8 @@ detectors = {
     10: f"{code_dir}/2D_detection/weights/obj_10/yolo11-detection-obj_10.pt",
     11: f"{code_dir}/2D_detection/weights/obj_11/yolo11-detection-obj_11.pt",
     14: f"{code_dir}/2D_detection/weights/obj_14/yolo11-detection-obj_14.pt",
-    18: f"{code_dir}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+    # 18: f"{code_dir}/2D_detection/yolo11_ipd/yolov11m_ipd_train_on_test/weights/best.pt",
+    18: f"{code_dir}/2D_detection/weights/obj_18/yolo11-detection-obj_18.pt",
     19: f"{code_dir}/2D_detection/weights/obj_19/yolo11-detection-obj_19.pt",
     20: f"{code_dir}/2D_detection/weights/obj_20/yolo11-detection-obj_20.pt",
 }
