@@ -39,7 +39,7 @@ detectors = {
 pipeline = pipeline_alpha(
     detector_paths=detectors,
     segmentor_path=f"{code_dir}/segmentation/FastSAM/weights/FastSAM-x.pt",
-    resize_factor=0.185,
+    resize_factor=0.37,
     debug=0,
 )
 
