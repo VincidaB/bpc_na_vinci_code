@@ -441,14 +441,20 @@ class pipeline_alpha:
 
                 for j, mask in enumerate(masks):
                     associated_2D_conf = results[0].boxes.conf[j]
-
+                    
+                    register_time_start = time.time()
                     pose = self.est.register(
                         K=cam_k,
                         rgb=color_resized,
                         depth=depth,
                         ob_mask=mask,
-                        iteration=4,
+                        iteration=3,
+                        precision=16,
                     )
+                    register_time = time.time() - register_time_start
+                    print(f"+++++++++++++++++++++++++++++")
+                    print(f"Register time: {register_time:.2f} seconds")
+                    print(f"+++++++++++++++++++++++++++++")
                     estimated_position = pose[:3, 3]
                     estimated_rotation = pose[:3, :3]
 
