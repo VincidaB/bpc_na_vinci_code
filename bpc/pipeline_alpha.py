@@ -285,12 +285,8 @@ class pipeline_alpha:
         Computes the pose estimates for the objects in the scene,
         returns the object id, the score or confidence, and the pose
         """
-        pose_estimates = []
-        cameras_to_use = [
-            cam_1,
-            # cam_2,
-            # cam_3
-        ]
+        cameras_to_use = [cam_1, cam_2, cam_3]
+        pose_estimates = [[] for i in range(len(cameras_to_use))]
 
         # intersection of object_ids and the objects_to_onsider
         objects_to_detect = list(
@@ -299,7 +295,8 @@ class pipeline_alpha:
         print(f"object_ids  : {object_ids}")
         print(f"Objects to detect: {objects_to_detect}")
 
-        for cam in cameras_to_use:
+        for camera_index, cam in enumerate(cameras_to_use):
+
             cam_k = scale_cam_k(cam.intrinsics, self.resize_factor)
             print(f"Camera intrinsics matrix (cam_K): {cam_k}")
             camera_pose = cam.pose
@@ -441,7 +438,7 @@ class pipeline_alpha:
 
                 for j, mask in enumerate(masks):
                     associated_2D_conf = results[0].boxes.conf[j]
-                    
+
                     register_time_start = time.time()
                     pose = self.est.register(
                         K=cam_k,
@@ -511,7 +508,7 @@ class pipeline_alpha:
                         "conf": conf,
                         "pose": pose_not_msg,
                     }
-                    pose_estimates.append(pose_estimate)
+                    pose_estimates[camera_index].append(pose_estimate)
 
                     if self.debug >= 1:
                         center_pose = pose @ np.linalg.inv(to_origin)
@@ -539,7 +536,8 @@ class pipeline_alpha:
                     )
 
         self.image_number += 1
-        return pose_estimates
+        #! returning only the pose estimates of the first camera for now
+        return pose_estimates[0]
 
     def generate_masks(self, bbox_results):
         masks = []

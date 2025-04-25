@@ -125,6 +125,12 @@ class PoseEstimator(Node):
         image = request.cameras[0].rgb
         image = bridge.imgmsg_to_cv2(image, desired_encoding="passthrough")
 
+        image2 = request.cameras[1].rgb
+        image2 = bridge.imgmsg_to_cv2(image2, desired_encoding="passthrough")
+
+        image3 = request.cameras[2].rgb
+        image3 = bridge.imgmsg_to_cv2(image3, desired_encoding="passthrough")
+
         depth = request.cameras[0].depth
         print("encoding: ", depth.encoding)  # --> 32FC1
 
@@ -154,10 +160,27 @@ class PoseEstimator(Node):
         image_bytes = cv2.imencode(".png", image)[1].tobytes()
         image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
+        image2_bytes = cv2.imencode(".png", image2)[1].tobytes()
+        image2_base64 = base64.b64encode(image2_bytes).decode("utf-8")
+
+        image3_bytes = cv2.imencode(".png", image3)[1].tobytes()
+        image3_base64 = base64.b64encode(image3_bytes).decode("utf-8")
+
         # depth_bytes = cv2.imencode(".png", depth)[1].tobytes()
         # depth_base64 = base64.b64encode(depth_bytes).decode("utf-8")
 
         depth_payload = {
+            "data": depth_array.flatten().tolist(),
+            "width": depth_array.shape[1],
+            "height": depth_array.shape[0],
+        }
+
+        depth_payload2 = {
+            "data": depth_array.flatten().tolist(),
+            "width": depth_array.shape[1],
+            "height": depth_array.shape[0],
+        }
+        depth_payload3 = {
             "data": depth_array.flatten().tolist(),
             "width": depth_array.shape[1],
             "height": depth_array.shape[0],
@@ -169,6 +192,10 @@ class PoseEstimator(Node):
 
         intrinsics = np.array(request.cameras[0].info.k).tolist()
         camera_pose = ros_pose_to_mat(request.cameras[0].pose).flatten().tolist()
+        intrinsics2 = np.array(request.cameras[1].info.k).tolist()
+        camera_pose2 = ros_pose_to_mat(request.cameras[1].pose).flatten().tolist()
+        intrinsics3 = np.array(request.cameras[2].info.k).tolist()
+        camera_pose3 = ros_pose_to_mat(request.cameras[2].pose).flatten().tolist()
 
         self.get_logger().info("Camera intrinsics: " + str(intrinsics))
         self.get_logger().info("Camera extrinsics: " + str(camera_pose))
@@ -181,6 +208,14 @@ class PoseEstimator(Node):
             "cam_1_depth": depth_payload,
             "cam_1_intrinsics": intrinsics,
             "cam_1_extrinsics": camera_pose,
+            "cam_2": image2_base64,
+            "cam_2_depth": depth_payload2,
+            "cam_2_intrinsics": intrinsics2,
+            "cam_2_extrinsics": camera_pose2,
+            "cam_3": image3_base64,
+            "cam_3_depth": depth_payload3,
+            "cam_3_intrinsics": intrinsics3,
+            "cam_3_extrinsics": camera_pose3,
         }
         max_retries = 5
         retry_delay = 2  # seconds

@@ -39,7 +39,7 @@ detectors = {
 pipeline = pipeline_alpha(
     detector_paths=detectors,
     segmentor_path=f"{code_dir}/segmentation/FastSAM/weights/FastSAM-x.pt",
-    resize_factor=0.37,
+    resize_factor=0.185,  # 185 usually is fine
     debug=0,
 )
 
@@ -60,6 +60,16 @@ class PoseRequest(BaseModel):
     cam_1_intrinsics: List[float]
     cam_1_extrinsics: List[float]
 
+    cam_2: bytes  # send JPEG or PNG-encoded bytes
+    cam_2_depth: DepthPayload  # Use the new depth payload structure
+    cam_2_intrinsics: List[float]
+    cam_2_extrinsics: List[float]
+
+    cam_3: bytes  # send JPEG or PNG-encoded bytes
+    cam_3_depth: DepthPayload  # Use the new depth payload structure
+    cam_3_intrinsics: List[float]
+    cam_3_extrinsics: List[float]
+
 
 @app.post("/estimate")
 def estimate_pose(req: PoseRequest):
@@ -72,9 +82,30 @@ def estimate_pose(req: PoseRequest):
     if img is None:
         raise ValueError("Failed to decode RGB image. Ensure the input is valid.")
 
+    image_bytes = base64.b64decode(req.cam_2)
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img2 = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if img2 is None:
+        raise ValueError("Failed to decode RGB image. Ensure the input is valid.")
+
+    image_bytes = base64.b64decode(req.cam_3)
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img3 = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+    if img3 is None:
+        raise ValueError("Failed to decode RGB image. Ensure the input is valid.")
+
     # Decode depth image
     depth_data = np.array(req.cam_1_depth.data, dtype=np.uint16)
     depth = depth_data.reshape((req.cam_1_depth.height, req.cam_1_depth.width))
+
+    depth_data2 = np.array(req.cam_2_depth.data, dtype=np.uint16)
+    depth2 = depth_data2.reshape((req.cam_2_depth.height, req.cam_2_depth.width))
+
+    depth_data3 = np.array(req.cam_3_depth.data, dtype=np.uint16)
+    depth3 = depth_data3.reshape((req.cam_3_depth.height, req.cam_3_depth.width))
+
     # Check if depth image is valid
     print("max depth value:", np.max(depth))
     print("min depth value:", np.min(depth))
@@ -96,11 +127,27 @@ def estimate_pose(req: PoseRequest):
         depth=depth,
     )
 
+    cam_2 = Camera(
+        frame_id="cam_2",
+        pose=np.array(req.cam_2_extrinsics).reshape((4, 4)),
+        intrinsics=np.array(req.cam_2_intrinsics).reshape((3, 3)),
+        rgb=img2,
+        depth=depth2,
+    )
+
+    cam_3 = Camera(
+        frame_id="cam_2",
+        pose=np.array(req.cam_2_extrinsics).reshape((4, 4)),
+        intrinsics=np.array(req.cam_2_intrinsics).reshape((3, 3)),
+        rgb=img3,
+        depth=depth3,
+    )
+
     poses = pipeline.get_pose_estimates(
         object_ids=req.object_ids,
         cam_1=cam_1,
-        cam_2=cam_1,
-        cam_3=cam_1,
+        cam_2=cam_2,
+        cam_3=cam_3,
         photoneo=None,
     )
 
