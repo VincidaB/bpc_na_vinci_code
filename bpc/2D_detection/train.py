@@ -3,7 +3,10 @@ from ultralytics import YOLO
 import torch
 import argparse
 
-def train_yolo11(task, data_path, obj_id, epochs, imgsz, batch, resume=False, model_path=None):
+
+def train_yolo11(
+    task, data_path, obj_id, epochs, imgsz, batch, resume=False, model_path=None
+):
     """
     Train YOLO11 for a specific task ("detection" or "segmentation")
     using Ultralytics YOLO with a single object class.
@@ -36,7 +39,9 @@ def train_yolo11(task, data_path, obj_id, epochs, imgsz, batch, resume=False, mo
             print("Starting training from basic pre-trained model yolo11n.pt.")
             pretrained_weights = "yolo11n.pt"
         elif not os.path.exists(model_path):
-            print(f"Couldn't find specified model at {model_path}. Starting training from basic pre-trained model yolo11n.pt.")
+            print(
+                f"Couldn't find specified model at {model_path}. Starting training from basic pre-trained model yolo11n.pt."
+            )
             pretrained_weights = "yolo11n.pt"
         else:
             print(f"Resuming training from {model_path}.")
@@ -79,7 +84,7 @@ def train_yolo11(task, data_path, obj_id, epochs, imgsz, batch, resume=False, mo
     # Force the final save to your desired path:
     #   idp_codebase/yolo/models/<detection or segmentation>/obj_<obj_id>/yolo11-<task_suffix>-obj_<obj_id>.pt
     # ----------------------------------------------------------------------------
-    save_dir = os.path.join("bpc","yolo", "models", task_suffix, f"obj_{obj_id}")
+    save_dir = os.path.join("bpc", "yolo", "models", task_suffix, f"obj_{obj_id}")
     os.makedirs(save_dir, exist_ok=True)
 
     model_name = f"yolo11-{task_suffix}-obj_{obj_id}.pt"
@@ -93,19 +98,44 @@ def train_yolo11(task, data_path, obj_id, epochs, imgsz, batch, resume=False, mo
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train YOLO11 on a specific dataset and object.")
-    parser.add_argument("--obj_id", type=int, required=True, help="Object ID for training (e.g., 18).")
-    parser.add_argument("--data_path", type=str, required=True, 
-                        help="Path to the dataset YAML file (e.g. bpc/2D_detection/configs/data_obj_18.yaml).")
-    parser.add_argument("--epochs", type=int, default=30, help="Number of training epochs.")
+    parser = argparse.ArgumentParser(
+        description="Train YOLO11 on a specific dataset and object."
+    )
+    parser.add_argument(
+        "--obj_id", type=int, required=True, help="Object ID for training (e.g., 18)."
+    )
+    parser.add_argument(
+        "--data_path",
+        type=str,
+        required=True,
+        help="Path to the dataset YAML file (e.g. bpc/2D_detection/configs/data_obj_18.yaml).",
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=30, help="Number of training epochs."
+    )
     parser.add_argument("--imgsz", type=int, default=640, help="Input image size.")
-    parser.add_argument("--batch", type=int, default=16, help="Batch size for training.")
-    parser.add_argument("--task", type=str, choices=["detection", "segmentation"], default="detection",
-                        help="Task type (detection or segmentation).")
-    parser.add_argument("--resume", type=bool, default=False,
-                        help="Whether to resume from a previously trained model. Please specify --model_path if True.")
-    parser.add_argument("--model_path", type=str, default="",
-                        help="If --resume is True, path to the model to build upon (e.g. runs/detect/train/weights/best.pt).")
+    parser.add_argument(
+        "--batch", type=int, default=16, help="Batch size for training."
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        choices=["detection", "segmentation"],
+        default="detection",
+        help="Task type (detection or segmentation).",
+    )
+    parser.add_argument(
+        "--resume",
+        type=bool,
+        default=False,
+        help="Whether to resume from a previously trained model. Please specify --model_path if True.",
+    )
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        default="",
+        help="If --resume is True, path to the model to build upon (e.g. runs/detect/train/weights/best.pt).",
+    )
 
     args = parser.parse_args()
 
@@ -117,7 +147,7 @@ def main():
         imgsz=args.imgsz,
         batch=args.batch,
         resume=args.resume,
-        model_path=args.model_path
+        model_path=args.model_path,
     )
 
 

@@ -5,6 +5,7 @@ import argparse
 from tqdm import tqdm
 from PIL import Image  # For getting image dimensions
 
+
 def prepare_train_pbr(train_pbr_path, output_path, obj_id):
     """
     Prepare the train_pbr dataset for YOLO, filtering by specific object ID.
@@ -17,12 +18,12 @@ def prepare_train_pbr(train_pbr_path, output_path, obj_id):
     camera_gt_map = {
         "rgb_cam1": "scene_gt_cam1.json",
         "rgb_cam2": "scene_gt_cam2.json",
-        "rgb_cam3": "scene_gt_cam3.json"
+        "rgb_cam3": "scene_gt_cam3.json",
     }
     camera_gt_info_map = {
         "rgb_cam1": "scene_gt_info_cam1.json",
         "rgb_cam2": "scene_gt_info_cam2.json",
-        "rgb_cam3": "scene_gt_info_cam3.json"
+        "rgb_cam3": "scene_gt_info_cam3.json",
     }
 
     # Ensure the "images" and "labels" directories exist
@@ -33,7 +34,8 @@ def prepare_train_pbr(train_pbr_path, output_path, obj_id):
 
     # Iterate over each scene (e.g. 000000, 000001, ...)
     scene_folders = [
-        d for d in os.listdir(train_pbr_path)
+        d
+        for d in os.listdir(train_pbr_path)
         if os.path.isdir(os.path.join(train_pbr_path, d)) and not d.startswith(".")
     ]
     scene_folders.sort()  # optional: sort numerically
@@ -54,7 +56,9 @@ def prepare_train_pbr(train_pbr_path, output_path, obj_id):
                 print(f"Missing JSON file for {cam} in {scene_folder}: {scene_gt_file}")
                 continue
             if not os.path.exists(scene_gt_info_file):
-                print(f"Missing JSON file for {cam} in {scene_folder}: {scene_gt_info_file}")
+                print(
+                    f"Missing JSON file for {cam} in {scene_folder}: {scene_gt_info_file}"
+                )
                 continue
 
             # Load the JSON files for ground truth + info
@@ -69,7 +73,11 @@ def prepare_train_pbr(train_pbr_path, output_path, obj_id):
                 img_key = str(img_id)
                 img_file_jpg = os.path.join(rgb_path, f"{img_id:06d}.jpg")
                 img_file_png = os.path.join(rgb_path, f"{img_id:06d}.png")
-                img_file = img_file_jpg if os.path.exists(img_file_jpg) else img_file_png if os.path.exists(img_file_png) else None
+                img_file = (
+                    img_file_jpg
+                    if os.path.exists(img_file_jpg)
+                    else img_file_png if os.path.exists(img_file_png) else None
+                )
 
                 if img_file is None:
                     continue
@@ -81,7 +89,9 @@ def prepare_train_pbr(train_pbr_path, output_path, obj_id):
                 # Filter only bounding boxes for 'obj_id'
                 # We also check if visibility fraction > 0 (you can adjust this threshold)
                 valid_bboxes = []
-                for bbox_info, gt_info in zip(scene_gt_info_data[img_key], scene_gt_data[img_key]):
+                for bbox_info, gt_info in zip(
+                    scene_gt_info_data[img_key], scene_gt_data[img_key]
+                ):
                     if gt_info["obj_id"] == obj_id and bbox_info["visib_fract"] > 0:
                         valid_bboxes.append(bbox_info["bbox_obj"])  # (x, y, w, h)
 
@@ -102,14 +112,16 @@ def prepare_train_pbr(train_pbr_path, output_path, obj_id):
                 out_label_name = f"{scene_folder}_{cam}_{img_id:06d}.txt"
                 out_label_path = os.path.join(labels_dir, out_label_name)
                 with open(out_label_path, "w") as lf:
-                    for (x, y, w, h) in valid_bboxes:
+                    for x, y, w, h in valid_bboxes:
                         x_center = (x + w / 2) / img_width
                         y_center = (y + h / 2) / img_height
                         width = w / img_width
                         height = h / img_height
                         # YOLO format: class x_center y_center width height
                         # Here class is always '0' because we have only 1 object
-                        lf.write(f"0 {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n")
+                        lf.write(
+                            f"0 {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}\n"
+                        )
 
 
 def generate_yaml(output_path, obj_id):
@@ -134,7 +146,7 @@ def generate_yaml(output_path, obj_id):
         "train": train_path,
         "val": val_path,
         "nc": 1,
-        "names": [f"object_{obj_id}"]
+        "names": [f"object_{obj_id}"],
     }
 
     with open(yaml_path, "w") as f:
@@ -146,19 +158,30 @@ def generate_yaml(output_path, obj_id):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Prepare the train_pbr dataset for YOLO training.")
-    parser.add_argument("--dataset_path", type=str, required=True,
-                        help="Path to the train_pbr dataset (e.g. .../ipd_bop_data_jan25_1/train_pbr).")
-    parser.add_argument("--output_path", type=str, required=True,
-                        help="Output path for YOLO dataset (e.g. .../datasets/yolo11/ipd_bop_data_jan25_1_obj_11).")
-    parser.add_argument("--obj_id", type=int, required=True,
-                        help="Object ID to filter for (e.g. 11).")
+    parser = argparse.ArgumentParser(
+        description="Prepare the train_pbr dataset for YOLO training."
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        required=True,
+        help="Path to the train_pbr dataset (e.g. .../ipd_bop_data_jan25_1/train_pbr).",
+    )
+    parser.add_argument(
+        "--output_path",
+        type=str,
+        required=True,
+        help="Output path for YOLO dataset (e.g. .../datasets/yolo11/ipd_bop_data_jan25_1_obj_11).",
+    )
+    parser.add_argument(
+        "--obj_id", type=int, required=True, help="Object ID to filter for (e.g. 11)."
+    )
 
     args = parser.parse_args()
 
     dataset_path = args.dataset_path
-    output_path  = args.output_path
-    obj_id       = args.obj_id
+    output_path = args.output_path
+    obj_id = args.obj_id
 
     # 1) Prepare YOLO images + labels
     prepare_train_pbr(dataset_path, output_path, obj_id)

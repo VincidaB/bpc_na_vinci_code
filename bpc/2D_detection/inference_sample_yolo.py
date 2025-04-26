@@ -22,7 +22,9 @@ def show_example_detection(model_path, image_path):
     # Draw detections directly on the image
     for box in results.boxes.xyxy:
         x1, y1, x2, y2 = map(int, box[:4])
-        cv2.rectangle(img_rgb, (x1, y1), (x2, y2), (255, 0, 0), 3)  # Draw bounding box in blue
+        cv2.rectangle(
+            img_rgb, (x1, y1), (x2, y2), (255, 0, 0), 3
+        )  # Draw bounding box in blue
 
     # Display the image using Matplotlib
     plt.figure(figsize=(8, 8))
@@ -33,18 +35,25 @@ def show_example_detection(model_path, image_path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Train YOLO11 on a specific dataset and object.")
-    parser.add_argument("--model_path", type=str, required=True,
-                        help="Path to your trained mode (e.g. `bpc/yolo/models/detection/obj_18/yolo11-detection-obj_18.pt`)")
-    parser.add_argument("--image_path", type=str, required=True,
-                        help="One image to assess your model on (e.g. `datasets/data/train_pbr/000005/rgb_cam1/000001.jpg`)")
-    
+    parser = argparse.ArgumentParser(
+        description="Train YOLO11 on a specific dataset and object."
+    )
+    parser.add_argument(
+        "--model_path",
+        type=str,
+        required=True,
+        help="Path to your trained mode (e.g. `bpc/yolo/models/detection/obj_18/yolo11-detection-obj_18.pt`)",
+    )
+    parser.add_argument(
+        "--image_path",
+        type=str,
+        required=True,
+        help="One image to assess your model on (e.g. `datasets/data/train_pbr/000005/rgb_cam1/000001.jpg`)",
+    )
+
     args = parser.parse_args()
 
-    show_example_detection(
-        model_path=args.model_path,
-        image_path=args.image_path
-    )
+    show_example_detection(model_path=args.model_path, image_path=args.image_path)
 
 
 if __name__ == "__main__":
