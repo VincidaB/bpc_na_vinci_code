@@ -446,7 +446,7 @@ class pipeline_alpha:
                         depth=depth,
                         ob_mask=mask,
                         iteration=3,
-                        #precision=16,
+                        precision=16,
                     )
                     register_time = time.time() - register_time_start
                     print(f"+++++++++++++++++++++++++++++")
@@ -536,8 +536,8 @@ class pipeline_alpha:
                     )
 
         self.image_number += 1
-        #! returning only the pose estimates of the first camera for now
-        return pose_estimates[0]
+        #! returning only the pose estimates of the second camera for now
+        return pose_estimates[1]
 
     def generate_masks(self, bbox_results):
         masks = []
