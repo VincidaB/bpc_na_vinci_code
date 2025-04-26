@@ -3,3 +3,6 @@
 *__pycache__
 .coverage
 .tox/
+runs/
+*.DS_Store
+yolo11n.pt
