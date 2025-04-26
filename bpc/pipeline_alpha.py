@@ -446,7 +446,7 @@ class pipeline_alpha:
                         depth=depth,
                         ob_mask=mask,
                         iteration=3,
-                        precision=16,
+                        #precision=16,
                     )
                     register_time = time.time() - register_time_start
                     print(f"+++++++++++++++++++++++++++++")
