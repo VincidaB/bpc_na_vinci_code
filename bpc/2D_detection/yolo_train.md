@@ -87,3 +87,12 @@ python3 bpc/2D_detection/inference_sample_yolo.py \
     --model_path "bpc/yolo/models/detection/obj_18/yolo11-detection-obj_18.pt" \
     --image_path "datasets/data/train_pbr/000005/rgb_cam1/000001.jpg"
 ```
+
+
+## Train a set of models automatically
+
+To train numerous models sequentially without having to prepare the data manually and start the training, you can use the `train_detection_script.sh` script. To do so, from the root of the project, run:
+```bash
+bash bpc/2D_detection/train_detection_script.sh x y z
+```
+where `x`, `y`, `z` are the ids of the objects you want to train models for. You should probably tweak the parameters that are passed for the training, especially the `--epochs` and `--batch` flags (a batch size of 16 is best suited for GPUs with a vRAM of 6G).

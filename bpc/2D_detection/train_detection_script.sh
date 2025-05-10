@@ -43,7 +43,7 @@ for id in "${obj_ids[@]}"; do
     python3 bpc/2D_detection/train.py \
         --obj_id $id \
         --data_path "bpc/2D_detection/configs/data_obj_$id.yaml" \
-        --epochs 100 \
+        --epochs 150 \
         --imgsz 640 \
         --batch 16 \
         --task detection
