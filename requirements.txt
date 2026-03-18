@@ -1,13 +1,13 @@
 # These requirements are from the bpc_baseline repo
 # https://github.com/CIRP-Lab/bpc_baseline
 # Core numeric / ML
-numpy==2.1.1
-scipy==1.14.0
-opencv-python==4.8.0.74
-torch==2.3.0
-torchvision==0.18.0
-torchaudio==2.3.0
-tensorboard==2.18.0
+numpy==1.26.4
+scipy==1.12.0
+opencv-python==4.9.0.80
+torch==2.0.0+cu118
+torchvision==2.0.0+cu118
+torchaudio==2.0.0+cu118
+tensorboard==0.5.3
 ultralytics==8.3.61
 
 # Visualization / augmentation
@@ -24,4 +24,7 @@ trimesh==4.5.3
 open3d==0.18.0
 
 # (Optional) For Jupyter
-jupyter
+#jupyter
+
+cv_bridge
+requests

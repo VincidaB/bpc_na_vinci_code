@@ -207,7 +207,7 @@ def main(argv=sys.argv):
 
     # Load the test split.
     test_split = get_split_params(datasets_path, dataset_name, split_type)
-    node.get_logger().info(f"Parsed test split: {test_split}")
+    #node.get_logger().info(f"Parsed test split: {test_split}")
 
     # Create the ROS client to query pose estimates.
     client = node.create_client(GetPoseEstimates, "/get_pose_estimates")
@@ -225,7 +225,8 @@ def main(argv=sys.argv):
             scene_id=scene_id
         )
         scene_gt = load_scene_gt(
-            test_split["scene_gt_rgb_photoneo_tpath"].format(scene_id=scene_id)
+            # test_split["scene_gt_rgb_photoneo_tpath"].format(scene_id=scene_id)
+            test_split["scene_gt_rgb_cam1_tpath"].format(scene_id=scene_id)
         )
 
         for img_id, obj_gts in list(scene_gt.items())[::-1]:

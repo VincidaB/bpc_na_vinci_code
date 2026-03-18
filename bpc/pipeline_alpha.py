@@ -7,6 +7,7 @@ import time
 # from segmentation.FastSAM.fastsam import FastSAM, FastSAMPrompt
 from ultralytics import FastSAM
 from ultralytics.models.fastsam import FastSAMPredictor
+from ultralytics.utils.plotting import plot_images
 import cv2
 import numpy as np
 
@@ -193,7 +194,7 @@ class pipeline_alpha:
         detector_paths: dict,
         segmentor_path: str,
         resize_factor: float = 0.185,
-        debug: int = 3,
+        debug: int = 0,
     ):
 
         self.resize_factor = resize_factor
@@ -209,14 +210,23 @@ class pipeline_alpha:
         self.objects_to_consider = [
             0,
             1,
-            4,
-            8,
-            10,
-            11,
-            14,
-            18,
-            19,
-            10,
+            2,
+            #3,
+            4, # paralelepiped 
+            5,
+            6,
+            # 7, # split washer
+            8, # longuer barre
+            9 
+            #1,
+            #4,
+            #8,
+            #10,
+            #11,
+            #14,
+            #18,
+            #19,
+            #10,
         ]
         # Initialize detectors as a dictionary where keys are object ids and values are YOLO objects
         self.detectors = {}
@@ -247,7 +257,7 @@ class pipeline_alpha:
             save=False,
             imgsz=1024,
             conf=0.4,
-            iou=0.8,
+            iou=0.65,
         )
         self.segmentor_predictor = FastSAMPredictor(overrides=self.overridess)
 
@@ -264,7 +274,7 @@ class pipeline_alpha:
         self.image_number = 0
 
         #! point to the correct file
-        info_file = f"{code_dir}/../meshes/models/models_info.json"
+        info_file = f"{code_dir}/../meshes/bpc_phase2_cads/models/models_info.json"
         with open(info_file, "r") as ff:
             info = json.load(ff)
         self.symmetry_tfs = {}
@@ -285,7 +295,8 @@ class pipeline_alpha:
         Computes the pose estimates for the objects in the scene,
         returns the object id, the score or confidence, and the pose
         """
-        cameras_to_use = [cam_1, cam_2, cam_3]
+        # cameras_to_use = [cam_1, cam_2, cam_3]
+        cameras_to_use = [cam_1]
         pose_estimates = [[] for i in range(len(cameras_to_use))]
 
         # intersection of object_ids and the objects_to_onsider
@@ -296,6 +307,12 @@ class pipeline_alpha:
         print(f"Objects to detect: {objects_to_detect}")
 
         for camera_index, cam in enumerate(cameras_to_use):
+
+            print("===================================")
+            print("===================================")
+            print(f"Camera name: {cam.name}")
+            print("===================================")
+            print("===================================")
 
             cam_k = scale_cam_k(cam.intrinsics, self.resize_factor)
             print(f"Camera intrinsics matrix (cam_K): {cam_k}")
@@ -331,18 +348,34 @@ class pipeline_alpha:
 
                 # Segmentation
                 everything_results = self.segmentor_predictor(color)
+                if self.debug >= 1:
+                    everything_results[0].save(
+                        f"{self.debug_dir}/everything{self.image_number}-cam{camera_index+1}.png",
+                        color_mode="instance",
+                        boxes=False,
+                    )
                 print(f"Found {len(everything_results[0].masks)} masks in the image")
                 print(f"Found {len(results[0].boxes)} boxes in the image")
+
+                
+
                 bbox_results = self.segmentor_predictor.prompt(
                     everything_results, bboxes=boxes
                 )
-
+                print(
+                    f"Found {len(bbox_results[0].masks)} masks in the image after segmentation"
+                )
+                if self.debug >= 1:
+                    bbox_results[0].save(f"{self.debug_dir}/segmentation{self.image_number}-cam{camera_index+1}.png")
                 # save a mask image for each objects
                 masks = self.generate_masks(bbox_results)
+
+                # save an image of all the masks
 
                 reordered_masks = []
                 # reorder the masks so that they match the boxes from the detection, we can use the intersection to do that
                 # we do that because the masks are not in the same order as the boxes and we want to match them to "propagate the score"
+                masks_copy = masks.copy()
                 for b, box in enumerate(boxes):
                     # Convert bounding box coordinates to integers
                     x_min, y_min, x_max, y_max = map(int, box)
@@ -353,10 +386,11 @@ class pipeline_alpha:
                     y_max = int(y_max * self.resize_factor)
 
                     print(f"Box {b}: ({x_min}, {y_min}), ({x_max}, {y_max})")
-                    max_intersection = 0
+                    max_intersection = -1
                     best_mask = None
 
-                    for m, mask in enumerate(masks):
+                    best_mask_index = -1
+                    for m, mask in enumerate(masks_copy):
                         # Extract the region of interest (ROI) from the mask
                         roi = mask[y_min:y_max, x_min:x_max]
 
@@ -368,15 +402,11 @@ class pipeline_alpha:
                             )
                             continue
 
-                        # Calculate the intersection and union
-
                         # the intersection is the number of white pixels that are in the roi
                         intersection = roi > 0
 
                         # Count the number of "white" pixels in the intersection and union
                         intersection_count = np.sum(intersection)
-
-                        # Calculate IoU
 
                         print(
                             f"Mask {m} has an intersection of {intersection_count} pixels with box {b}"
@@ -385,12 +415,29 @@ class pipeline_alpha:
                         if intersection_count > max_intersection:
                             max_intersection = intersection_count
                             best_mask = mask
+                            best_mask_index = m
+                    
+                    if best_mask_index != -1:
+                        print(
+                            f"Best mask for box {b} is mask {best_mask_index} with {max_intersection} pixels"
+                        )
+                        masks_copy.pop(best_mask_index)  # remove the best mask from the list
 
                     if best_mask is not None:
                         reordered_masks.append(best_mask)
                     else:
                         print(f"No mask found for box {b}, using the first mask")
-                        reordered_masks.append(masks[0])
+                        # well, actually, the prompt function might not return the same number of masks as boxes, so we need to handle that 
+                        
+                        # meaning this is not a good idea
+                        #reordered_masks.append(masks[0])
+
+                        # let's just return a completely white mask in the bounding box, and a black for the rest
+                        fake_mask = np.zeros_like(masks[0]) # this does not work if we are out of masks
+                        fake_mask[y_min:y_max, x_min:x_max] = 255
+
+
+                        reordered_masks.append(fake_mask)
 
                 masks = reordered_masks
 
@@ -402,7 +449,7 @@ class pipeline_alpha:
                     img = results[0].plot()
 
                     imageio.imwrite(
-                        f"{self.debug_dir}/2d_detections/{self.image_number}-obj{object_id}.png",
+                        f"{self.debug_dir}/2d_detections/{self.image_number}-obj{object_id}-cam{camera_index+1}.png",
                         img.astype(np.uint8),
                     )
                     for m, mask in enumerate(masks):
@@ -412,11 +459,11 @@ class pipeline_alpha:
 
                         associated_2D_conf = results[0].boxes.conf[m]
                         imageio.imwrite(
-                            f"{self.debug_dir}/mask/{self.image_number}/{m}-conf2d-{associated_2D_conf:.4f}.png",
+                            f"{self.debug_dir}/mask/{self.image_number}/{m}-conf2d-{associated_2D_conf:.4f}-cam{camera_index+1}.png",
                             mask.astype(np.uint8),
                         )
 
-                mesh_file = f"{code_dir}/../meshes/models/obj_{object_id:06d}.ply"
+                mesh_file = f"{code_dir}/../meshes/bpc_phase2_cads/models/obj_{object_id:06d}.ply"
                 print(f"Loading mesh from {mesh_file}")
                 mesh = trimesh.load(mesh_file)
                 mesh.apply_transform(
@@ -436,6 +483,7 @@ class pipeline_alpha:
                     to_origin, extents = trimesh.bounds.oriented_bounds(mesh)
                     bbox = np.stack([-extents / 2, extents / 2], axis=0).reshape(2, 3)
 
+                vis = None
                 for j, mask in enumerate(masks):
                     associated_2D_conf = results[0].boxes.conf[j]
 
@@ -445,8 +493,8 @@ class pipeline_alpha:
                         rgb=color_resized,
                         depth=depth,
                         ob_mask=mask,
-                        iteration=3,
-                        precision=16,
+                        iteration=6,
+                        #precision=16,
                     )
                     register_time = time.time() - register_time_start
                     print(f"+++++++++++++++++++++++++++++")
@@ -463,7 +511,7 @@ class pipeline_alpha:
                         m.export(f"{self.debug_dir}/model_tf.obj")
                         xyz_map = depth2xyzmap(depth, cam_k)
                         valid = depth >= 0.001
-                        pcd = toOpen3dCloud(xyz_map[valid], color[valid])
+                        pcd = toOpen3dCloud(xyz_map[valid], color_resized[valid])
                         o3d.io.write_point_cloud(
                             f"{self.debug_dir}/scene_complete.ply", pcd
                         )
@@ -474,8 +522,9 @@ class pipeline_alpha:
                     )
 
                     if self.debug >= 2:
-                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                        imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
+                        if vis is not None:
+                            os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                            imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
 
                     #! change the confidence (maybe use the score from the detection)
                     print(f"Estimated position: {estimated_position}")
@@ -530,14 +579,14 @@ class pipeline_alpha:
                         )
 
                 if self.debug >= 1:
-                    os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                    imageio.imwrite(
-                        f"{self.debug_dir}/track_vis/{self.image_number}.png", vis
-                    )
-
+                    if vis is not None:
+                        os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
+                        imageio.imwrite(
+                            f"{self.debug_dir}/track_vis/{self.image_number}-cam{camera_index+1}.png", vis
+                        )
         self.image_number += 1
         #! returning only the pose estimates of the second camera for now
-        return pose_estimates[1]
+        return pose_estimates[0]
 
     def generate_masks(self, bbox_results):
         masks = []
