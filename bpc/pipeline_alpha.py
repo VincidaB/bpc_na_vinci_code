@@ -211,22 +211,22 @@ class pipeline_alpha:
             0,
             1,
             2,
-            #3,
-            4, # paralelepiped 
+            # 3,
+            4,  # paralelepiped
             5,
             6,
             # 7, # split washer
-            8, # longuer barre
-            9 
-            #1,
-            #4,
-            #8,
-            #10,
-            #11,
-            #14,
-            #18,
-            #19,
-            #10,
+            8,  # longuer barre
+            9,
+            # 1,
+            # 4,
+            # 8,
+            # 10,
+            # 11,
+            # 14,
+            # 18,
+            # 19,
+            # 10,
         ]
         # Initialize detectors as a dictionary where keys are object ids and values are YOLO objects
         self.detectors = {}
@@ -357,8 +357,6 @@ class pipeline_alpha:
                 print(f"Found {len(everything_results[0].masks)} masks in the image")
                 print(f"Found {len(results[0].boxes)} boxes in the image")
 
-                
-
                 bbox_results = self.segmentor_predictor.prompt(
                     everything_results, bboxes=boxes
                 )
@@ -366,7 +364,9 @@ class pipeline_alpha:
                     f"Found {len(bbox_results[0].masks)} masks in the image after segmentation"
                 )
                 if self.debug >= 1:
-                    bbox_results[0].save(f"{self.debug_dir}/segmentation{self.image_number}-cam{camera_index+1}.png")
+                    bbox_results[0].save(
+                        f"{self.debug_dir}/segmentation{self.image_number}-cam{camera_index+1}.png"
+                    )
                 # save a mask image for each objects
                 masks = self.generate_masks(bbox_results)
 
@@ -416,26 +416,29 @@ class pipeline_alpha:
                             max_intersection = intersection_count
                             best_mask = mask
                             best_mask_index = m
-                    
+
                     if best_mask_index != -1:
                         print(
                             f"Best mask for box {b} is mask {best_mask_index} with {max_intersection} pixels"
                         )
-                        masks_copy.pop(best_mask_index)  # remove the best mask from the list
+                        masks_copy.pop(
+                            best_mask_index
+                        )  # remove the best mask from the list
 
                     if best_mask is not None:
                         reordered_masks.append(best_mask)
                     else:
                         print(f"No mask found for box {b}, using the first mask")
-                        # well, actually, the prompt function might not return the same number of masks as boxes, so we need to handle that 
-                        
+                        # well, actually, the prompt function might not return the same number of masks as boxes, so we need to handle that
+
                         # meaning this is not a good idea
-                        #reordered_masks.append(masks[0])
+                        # reordered_masks.append(masks[0])
 
                         # let's just return a completely white mask in the bounding box, and a black for the rest
-                        fake_mask = np.zeros_like(masks[0]) # this does not work if we are out of masks
+                        fake_mask = np.zeros_like(
+                            masks[0]
+                        )  # this does not work if we are out of masks
                         fake_mask[y_min:y_max, x_min:x_max] = 255
-
 
                         reordered_masks.append(fake_mask)
 
@@ -494,7 +497,7 @@ class pipeline_alpha:
                         depth=depth,
                         ob_mask=mask,
                         iteration=6,
-                        #precision=16,
+                        # precision=16,
                     )
                     register_time = time.time() - register_time_start
                     print(f"+++++++++++++++++++++++++++++")
@@ -524,7 +527,9 @@ class pipeline_alpha:
                     if self.debug >= 2:
                         if vis is not None:
                             os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
-                            imageio.imwrite(f"{self.debug_dir}/track_vis/{i}-{j}.png", vis)
+                            imageio.imwrite(
+                                f"{self.debug_dir}/track_vis/{i}-{j}.png", vis
+                            )
 
                     #! change the confidence (maybe use the score from the detection)
                     print(f"Estimated position: {estimated_position}")
@@ -582,7 +587,8 @@ class pipeline_alpha:
                     if vis is not None:
                         os.makedirs(f"{self.debug_dir}/track_vis", exist_ok=True)
                         imageio.imwrite(
-                            f"{self.debug_dir}/track_vis/{self.image_number}-cam{camera_index+1}.png", vis
+                            f"{self.debug_dir}/track_vis/{self.image_number}-cam{camera_index+1}.png",
+                            vis,
                         )
         self.image_number += 1
         #! returning only the pose estimates of the second camera for now

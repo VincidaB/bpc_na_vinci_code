@@ -207,7 +207,7 @@ def main(argv=sys.argv):
 
     # Load the test split.
     test_split = get_split_params(datasets_path, dataset_name, split_type)
-    #node.get_logger().info(f"Parsed test split: {test_split}")
+    # node.get_logger().info(f"Parsed test split: {test_split}")
 
     # Create the ROS client to query pose estimates.
     client = node.create_client(GetPoseEstimates, "/get_pose_estimates")
